@@ -36,6 +36,7 @@ Options:
 - `-s`: trace the accesses to the softswitches at 0xc0xx
 - `-l`: do not convert the input to uppercase
 - `-r`: disable the readline like input with history
+- `-load <file>`: load the emulation state from a file on startup
 
 ## How it works
 
@@ -68,6 +69,10 @@ the emulated machine:
 
 - `/help`: list the meta commands
 - `/quit`: exit
+- `/save [filename]` and `/load [filename]`: save the emulation
+  state, CPU, RAM and video mode, and load it back, even on another
+  session. The state can also be loaded on startup with the `-load`
+  argument.
 - `/screenshot [filename.png]`: save a PNG image of the emulated screen,
   rendered with the [izapple2](https://github.com/ivanizag/izapple2)
   screen module. The video mode softswitches (0xc050-0xc057) are

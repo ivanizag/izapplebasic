@@ -51,11 +51,12 @@ func patchMonitorTraps(mem *appleMemory) {
 // intercepts the monitor calls.
 func run(env *environment) {
 	for !env.stop {
-		env.cpu.ExecuteInstruction()
-		if env.maxCycles != 0 && env.cpu.GetCycles() >= env.maxCycles {
-			env.stop = true
-		}
-
+		/*
+			The traps are processed before executing the instruction
+			at the entry point, the patched RTS. This way a state
+			restored while the machine was waiting on GETLN resumes
+			by serving that GETLN.
+		*/
 		pc, _ := env.cpu.GetPCAndSP()
 		switch pc {
 		case addrCOUT1:
@@ -80,6 +81,14 @@ func run(env *environment) {
 			// textPageClear also homes the cursor row CV
 			env.textPageClear()
 			env.setColumn(0)
+		}
+		if env.stop {
+			break
+		}
+
+		env.cpu.ExecuteInstruction()
+		if env.maxCycles != 0 && env.cpu.GetCycles() >= env.maxCycles {
+			env.stop = true
 		}
 	}
 }

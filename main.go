@@ -41,6 +41,10 @@ func main() {
 		"r",
 		false,
 		"disable readline like input with history")
+	loadFilename := flag.String(
+		"load",
+		"",
+		"load the emulation state from a file on startup")
 
 	flag.Parse()
 
@@ -71,6 +75,14 @@ func main() {
 	env.clearScreen = *clearScreen
 	env.mem.traceIO = *traceIO
 	env.cpu.SetTrace(*traceCPU)
+
+	if *loadFilename != "" {
+		err := env.loadState(*loadFilename)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	}
 
 	handleControlC(env)
 
