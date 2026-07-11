@@ -1,0 +1,74 @@
+; Copyright 2021 faddenSoft. All Rights Reserved.
+; See the LICENSE.txt file for distribution terms (Apache 2.0).
+;
+; Sources:
+;  Integer BASIC disassembly, by Paul R. Santa-Maria
+;  What's Where in the Apple, by William F. Luebbert
+
+*SYNOPSIS Integer BASIC addresses and constants
+
+;
+; Zero-page usage.
+;
+LOMEM           @ $4a 2     ;pointer to start of variables
+HIMEM           @ $4c 2     ;pointer to end of program
+NOUNSTKL        @ $50 8     ;noun stack low bytes
+SYNSTKH         @ $58       ;syntax stack high byte
+NOUNSTKH        @ $78 32    ;noun stack high bytes
+SYNSTKL         @ $80 32    ;syntax stack low bytes
+NOUNSTKC        @ $a0 32    ;noun stack counter
+TXTNDXSTK       @ $a8 32    ;text index stack
+TXTNDX          @ $c8       ;text index val (OUTVAL)
+LEADBL          @ $c9       ;leading blanks index (YTEMP)
+PP              @ $ca 2     ;pointer to start of program
+PV              @ $cc 2     ;pointer to end of vars
+ACC             @ $ce 2     ;main accumulator
+SRCH            @ $d0 2     ;pointer to search var table
+TOKNDXSTK       @ $d1 32    ;token index stack
+SRCH2           @ $d2 2     ;second var search pointer
+IFFLAG          @ $d4       ;IF/THEN fail flag
+CRFLAG          @ $d5       ;carriage return flag
+VERBNOW         @ $d6       ;verb currently in use
+PRFLAG          @ $d7       ;print it now flag
+XSAVE           @ $d8       ;temp X-reg save
+RUNFLAG         @ $d9       ;run mode flag
+AUX             @ $da 2     ;aux counter
+PR              @ $dc 2     ;current line value
+PN              @ $de 2     ;pointer to current noun
+PX              @ $e0 2     ;pointer to current verb
+P1              @ $e2 2     ;aux pointer 1 (delete line ptr)
+P2              @ $e4 2     ;aux pointer 2 (line num , next num, ...)
+P3              @ $e6 2     ;aux pointer 3 (next ptr)
+TOKNDX          @ $f1       ;token index val
+PCON            @ $f2 2     ;continue pointer (PRDEC low/hi)
+AUTOINC         @ $f4 2     ;auto line increment
+AUTOLN          @ $f6 2     ;current auto line
+AUTOFLAG        @ $f8       ;auto line mode flag ($ff=on)
+CHAR            @ $f9       ;current char
+LEADZR          @ $fa       ;leading zeroes index ($00,$a0,$b0)
+FORNDX          @ $fb       ;FOR-NEXT loop index
+GOSUBNDX        @ $fc       ;GOSUB index
+SYNSTKDX        @ $fd       ;syntax stack index val
+SYNPAG          @ $fe 2     ;pointer to syntax page
+
+; GOSUB/RETURN usage
+;
+; These are actually 16 bytes, but if we declare them as 15 then
+; $015f becomes STK_60-1 (which we want) instead of STK_50+15.
+STK_00          @ $0100 15
+STK_10          @ $0110 15
+STK_20          @ $0120 15
+STK_30          @ $0130 15
+
+; FOR/NEXT/STEP usage
+STK_40          @ $0140 15
+STK_50          @ $0150 15
+STK_60          @ $0160 15
+STK_70          @ $0170 15
+STK_80          @ $0180 15
+STK_90          @ $0190 15
+STK_A0          @ $01a0 15
+STK_B0          @ $01b0 15
+STK_C0          @ $01c0 15
+STK_D0          @ $01d0 15
+
