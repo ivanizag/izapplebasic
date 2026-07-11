@@ -1,0 +1,22 @@
+# Example deployment of the izapplebasic telegram bot.
+#
+# Put the token in a .env file next to this one:
+#    TELEGRAM_TOKEN=123456:ABC-...
+#
+# The telegram-data directory holds the state and logs of the users,
+# create it owned by uid 1000 before the first run:
+#    mkdir -p telegram-data
+#
+# The build context is the repository root: the binary embeds the
+# ROMs and depends on the core package.
+
+services:
+  izapplebasic-telegram:
+    build:
+      context: ../..
+      dockerfile: cmd/izapplebasic-telegram/Dockerfile
+    user: "1000:1000"
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./telegram-data:/data

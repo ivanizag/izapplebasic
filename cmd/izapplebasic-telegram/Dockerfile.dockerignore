@@ -1,0 +1,12 @@
+# Per-Dockerfile ignore, honored by BuildKit. Paths are relative to
+# the build context, the repository root.
+.git
+.claude
+telegram-data
+cmd/izapplebasic-telegram/telegram-data
+izapplebasic
+izapplebasic-telegram
+*.state
+*.png
+.izapplebasichistory
+original/*.dis65

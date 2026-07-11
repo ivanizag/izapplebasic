@@ -135,6 +135,11 @@ Each user has a directory under `-data` (default `telegram-data`)
 with the current state, the named saved states and a log of the
 interaction.
 
+To deploy with docker compose, from `cmd/izapplebasic-telegram`: put
+the token in a `.env` file (`TELEGRAM_TOKEN=...`), create the
+`telegram-data` directory owned by uid 1000, and run
+`docker compose up -d`.
+
 ## Limitations
 
 - Line based input: `GET` waits for the enter key and takes the
