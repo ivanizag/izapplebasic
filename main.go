@@ -4,7 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
+
+const controlCDelayToQuitMs = 500
 
 func main() {
 	romFilename := flag.String(
@@ -60,9 +65,32 @@ func main() {
 	env.mem.traceIO = *traceIO
 	env.cpu.SetTrace(*traceCPU)
 
+	handleControlC(env)
+
 	fmt.Println("izapplebasic - Applesoft BASIC on modern hardware, https://github.com/ivanizag/izapplebasic")
-	fmt.Println("(press control-d to exit)")
+	fmt.Println("(press control-d or control-c twice to exit)")
 
 	run(env)
 	fmt.Println()
+}
+
+// handleControlC breaks the running BASIC program on control-C
+// instead of killing the process. Two in fast succession quit.
+func handleControlC(env *environment) {
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		lastTimestamp := time.Time{}
+		for range c {
+			timestamp := time.Now()
+			delay := timestamp.Sub(lastTimestamp)
+			if delay.Milliseconds() < controlCDelayToQuitMs {
+				// Two control-c in fast succession, quit
+				fmt.Println()
+				os.Exit(0)
+			}
+			lastTimestamp = timestamp
+			env.mem.breakPending.Store(true)
+		}
+	}()
 }

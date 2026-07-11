@@ -68,5 +68,5 @@ The frontends implement the `console` interface in `console.go`.
 - Line based input: `GET` waits for the enter key and takes the
   characters of the line one by one.
 - No graphics, no direct screen memory access, no cassette, no disk.
-- Ctrl-C does not break a running BASIC program, it kills the
-  process.
+- Control-C breaks the running BASIC program as on a real Apple II,
+  press it twice in fast succession to quit.

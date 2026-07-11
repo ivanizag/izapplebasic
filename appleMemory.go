@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync/atomic"
 )
 
 /*
@@ -20,11 +21,20 @@ const (
 	slotAreaStart = uint16(0xc100)
 	romAreaStart  = uint16(0xd000)
 	romSize       = 0x3000
+
+	ioKeyboard = uint16(0xc000)
+	ioStrobe   = uint16(0xc010)
 )
 
 type appleMemory struct {
 	data    [65536]uint8
 	traceIO bool
+
+	// breakPending presents a control-C keypress on the keyboard
+	// softswitch. Applesoft polls it between statements to break a
+	// running program. Set from the control-C signal handler
+	// goroutine.
+	breakPending atomic.Bool
 }
 
 func newAppleMemory(rom []uint8) (*appleMemory, error) {
@@ -41,9 +51,16 @@ func (m *appleMemory) Peek(address uint16) uint8 {
 		if m.traceIO && address < slotAreaStart {
 			fmt.Printf("[[[IO read $%04X]]]\n", address)
 		}
-		// Softswitches and empty slots. Bit 7 clear on 0xc000
-		// reads as "no key pressed".
-		return 0
+		value := uint8(0)
+		if address == ioKeyboard && m.breakPending.Load() {
+			// A control-C keypress with the high bit set
+			value = 0x83
+		} else if address == ioStrobe {
+			m.breakPending.Store(false)
+		}
+		// Elsewhere, softswitches and empty slots read zero. Bit 7
+		// clear on 0xc000 reads as "no key pressed".
+		return value
 	}
 	return m.data[address]
 }
@@ -56,6 +73,9 @@ func (m *appleMemory) Poke(address uint16, value uint8) {
 	if address >= ioAreaStart {
 		if m.traceIO && address < slotAreaStart {
 			fmt.Printf("[[[IO write $%04X <= $%02X]]]\n", address, value)
+		}
+		if address == ioStrobe {
+			m.breakPending.Store(false)
 		}
 		// Softswitches are ignored and the ROM is not writable
 		return

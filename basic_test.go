@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBoot(t *testing.T) {
@@ -147,6 +148,25 @@ func TestPeekPoke(t *testing.T) {
 		"PRINT PEEK(768)",
 	})
 	assertContains(t, out, "123")
+}
+
+func TestBreakInfiniteLoop(t *testing.T) {
+	env, con := testEnvironment(t, []string{
+		"10 GOTO 10",
+		"RUN",
+	})
+	// Simulate a control-C keypress while the program runs
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		env.mem.breakPending.Store(true)
+	}()
+	run(env)
+	if env.cpu.GetCycles() >= testCyclesLimit {
+		t.Log(con.output)
+		t.Fatal("the program was not interrupted")
+	}
+	// Applesoft embeds a BEL in the error messages
+	assertContains(t, con.output, "BREAK\a IN 10")
 }
 
 func TestMonitorFromBasic(t *testing.T) {

@@ -129,12 +129,18 @@ func (env *environment) setColumn(col uint8) {
 
 func execKEYIN(env *environment) {
 	env.log("KEYIN()")
+	_, x, y, p := env.cpu.GetAXYP()
+	if env.mem.breakPending.Swap(false) {
+		// Deliver the pending control-C, Applesoft consumes it
+		// with RDKEY when breaking a running program
+		env.cpu.SetAXYP(0x83, x, y, p)
+		return
+	}
 	ch, eof := env.con.readChar()
 	if eof {
 		env.stop = true
 		return
 	}
-	_, x, y, p := env.cpu.GetAXYP()
 	env.cpu.SetAXYP(ch|0x80, x, y, p)
 }
 

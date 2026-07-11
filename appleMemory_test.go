@@ -49,6 +49,21 @@ func TestMemoryIOArea(t *testing.T) {
 	}
 }
 
+func TestMemoryBreakPending(t *testing.T) {
+	m, _ := newAppleMemory(embeddedROM)
+	if m.Peek(ioKeyboard) != 0 {
+		t.Error("no key must be pressed initially")
+	}
+	m.breakPending.Store(true)
+	if m.Peek(ioKeyboard) != 0x83 {
+		t.Error("a pending break must read as control-C")
+	}
+	m.Peek(ioStrobe)
+	if m.Peek(ioKeyboard) != 0 {
+		t.Error("the strobe must clear the pending break")
+	}
+}
+
 func TestMemoryPokeROM(t *testing.T) {
 	m, _ := newAppleMemory(embeddedROM)
 	m.pokeROM(addrCOUT1, 0x60)
