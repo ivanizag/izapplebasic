@@ -6,10 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 )
-
-const controlCDelayToQuitMs = 500
 
 func main() {
 	romFilename := flag.String(
@@ -40,6 +37,10 @@ func main() {
 		"l",
 		false,
 		"do not convert the input to uppercase")
+	rawline := flag.Bool(
+		"r",
+		false,
+		"disable readline like input with history")
 
 	flag.Parse()
 
@@ -53,12 +54,17 @@ func main() {
 		}
 	}
 
-	con := newConsoleStdio(!*noUppercase)
-	env, err := newEnvironment(rom, con)
+	env, err := newEnvironment(rom)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+	if *rawline || !stdinIsTerminal() {
+		env.con = newConsoleStdio(!*noUppercase)
+	} else {
+		env.con = newConsoleLiner(env, !*noUppercase)
+	}
+	defer env.con.close()
 	env.apiLog = *traceMonitor || *traceMonitorFull
 	env.apiLogIO = *traceMonitorFull
 	env.clearScreen = *clearScreen
@@ -68,10 +74,20 @@ func main() {
 	handleControlC(env)
 
 	fmt.Println("izapplebasic - Applesoft BASIC on modern hardware, https://github.com/ivanizag/izapplebasic")
-	fmt.Println("(press control-d or control-c twice to exit)")
+	fmt.Println("(press control-c twice to exit)")
 
 	run(env)
 	fmt.Println()
+}
+
+// stdinIsTerminal returns false when the input is piped or
+// redirected, the line editing is then disabled.
+func stdinIsTerminal() bool {
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return stat.Mode()&os.ModeCharDevice != 0
 }
 
 // handleControlC breaks the running BASIC program on control-C
@@ -80,17 +96,8 @@ func handleControlC(env *environment) {
 	c := make(chan os.Signal, 2)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
-		lastTimestamp := time.Time{}
 		for range c {
-			timestamp := time.Now()
-			delay := timestamp.Sub(lastTimestamp)
-			if delay.Milliseconds() < controlCDelayToQuitMs {
-				// Two control-c in fast succession, quit
-				fmt.Println()
-				os.Exit(0)
-			}
-			lastTimestamp = timestamp
-			env.mem.breakPending.Store(true)
+			env.escape()
 		}
 	}()
 }

@@ -17,4 +17,7 @@ type console interface {
 
 	// clear clears the screen, if the frontend supports it.
 	clear()
+
+	// close releases the frontend resources.
+	close()
 }

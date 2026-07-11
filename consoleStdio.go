@@ -55,3 +55,5 @@ func (c *consoleStdio) write(s string) {
 func (c *consoleStdio) clear() {
 	fmt.Print("\033[2J\033[H")
 }
+
+func (c *consoleStdio) close() {}

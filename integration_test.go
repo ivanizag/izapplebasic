@@ -13,10 +13,11 @@ const testCyclesLimit = 200_000_000
 func testEnvironment(t *testing.T, linesIn []string) (*environment, *consoleMock) {
 	t.Helper()
 	con := newConsoleMock(linesIn)
-	env, err := newEnvironment(embeddedROM, con)
+	env, err := newEnvironment(embeddedROM)
 	if err != nil {
 		t.Fatal(err)
 	}
+	env.con = con
 	env.maxCycles = testCyclesLimit
 	return env, con
 }

@@ -169,6 +169,25 @@ func TestBreakInfiniteLoop(t *testing.T) {
 	assertContains(t, con.output, "BREAK\a IN 10")
 }
 
+func TestBreakAtPromptDoesNotBreakNextRun(t *testing.T) {
+	env, con := testEnvironment(t, []string{
+		"10 PRINT \"DONE\"",
+		"RUN",
+	})
+	// A control-C pressed while typing the RUN line must not break
+	// the program it starts
+	con.onReadLine = func(line string) {
+		if line == "RUN" {
+			env.mem.breakPending.Store(true)
+		}
+	}
+	run(env)
+	assertContains(t, con.output, "DONE")
+	if strings.Contains(con.output, "BREAK") {
+		t.Errorf("the program must not break:\n%s", con.output)
+	}
+}
+
 func TestMonitorFromBasic(t *testing.T) {
 	// CALL -151 enters the monitor, which runs on the same
 	// intercepted GETLN and COUT routines

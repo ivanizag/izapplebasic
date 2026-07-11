@@ -35,6 +35,7 @@ Options:
 - `-M`: trace the intercepted monitor calls including char output
 - `-s`: trace the accesses to the softswitches at 0xc0xx
 - `-l`: do not convert the input to uppercase
+- `-r`: disable the readline like input with history
 
 ## How it works
 
@@ -58,7 +59,9 @@ host column and pads with spaces when `CH` jumps forward.
 
 ## Frontends
 
-- Command line: line based stdin/stdout, available now.
+- Command line: readline like input with history recall on the up
+  and down arrows, saved in `.izapplebasichistory`. Falls back to
+  plain stdin/stdout when the input is piped or with `-r`.
 - Telegram: planned.
 
 The frontends implement the `console` interface in `console.go`.

@@ -158,6 +158,9 @@ func execGETLN(env *environment, crFirst bool, showPrompt bool) {
 		env.stop = true
 		return
 	}
+	// A control-C pressed while typing would have been consumed as
+	// input by the real GETLN, it must not break the next RUN
+	env.mem.breakPending.Store(false)
 	env.log(fmt.Sprintf("GETLN() => %q", line))
 	if len(line) > inputBufferSize {
 		line = line[:inputBufferSize]

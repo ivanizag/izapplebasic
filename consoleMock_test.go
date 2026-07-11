@@ -8,6 +8,11 @@ type consoleMock struct {
 	lineIn  int
 	pending []uint8 // chars buffered for readChar()
 	output  string
+
+	// onReadLine, if set, is called before each line is returned,
+	// with the line about to be served. Used to inject events at a
+	// precise point of the session.
+	onReadLine func(line string)
 }
 
 func newConsoleMock(linesIn []string) *consoleMock {
@@ -20,6 +25,9 @@ func (c *consoleMock) nextLine() (string, bool) {
 	}
 	line := c.linesIn[c.lineIn]
 	c.lineIn++
+	if c.onReadLine != nil {
+		c.onReadLine(line)
+	}
 	return line, false
 }
 
@@ -53,3 +61,5 @@ func (c *consoleMock) write(s string) {
 func (c *consoleMock) clear() {
 	c.output += "\f"
 }
+
+func (c *consoleMock) close() {}
