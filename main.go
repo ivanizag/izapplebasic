@@ -60,11 +60,12 @@ func main() {
 		os.Exit(1)
 	}
 	if *rawline || !stdinIsTerminal() {
-		env.con = newConsoleStdio(!*noUppercase)
+		env.con = newConsoleStdio()
 	} else {
-		env.con = newConsoleLiner(env, !*noUppercase)
+		env.con = newConsoleLiner(env)
 	}
 	defer env.con.close()
+	env.uppercase = !*noUppercase
 	env.apiLog = *traceMonitor || *traceMonitorFull
 	env.apiLogIO = *traceMonitorFull
 	env.clearScreen = *clearScreen
@@ -74,7 +75,7 @@ func main() {
 	handleControlC(env)
 
 	fmt.Println("izapplebasic - Applesoft BASIC on modern hardware, https://github.com/ivanizag/izapplebasic")
-	fmt.Println("(press control-c twice to exit)")
+	fmt.Println("(type /help for the meta commands, press control-c twice to exit)")
 
 	run(env)
 	fmt.Println()

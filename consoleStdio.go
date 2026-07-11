@@ -10,15 +10,13 @@ import (
 // consoleStdio is the command line frontend. It reads lines from
 // stdin and writes to stdout.
 type consoleStdio struct {
-	in        *bufio.Reader
-	pending   []uint8 // chars buffered for readChar()
-	uppercase bool
+	in      *bufio.Reader
+	pending []uint8 // chars buffered for readChar()
 }
 
-func newConsoleStdio(uppercase bool) *consoleStdio {
+func newConsoleStdio() *consoleStdio {
 	var c consoleStdio
 	c.in = bufio.NewReader(os.Stdin)
-	c.uppercase = uppercase
 	return &c
 }
 
@@ -29,9 +27,6 @@ func (c *consoleStdio) readLine(prompt string) (string, bool) {
 		return "", true
 	}
 	line = strings.TrimRight(line, "\r\n")
-	if c.uppercase {
-		line = strings.ToUpper(line)
-	}
 	return line, false
 }
 

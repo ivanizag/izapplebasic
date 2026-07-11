@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 /*
 Monitor entry points intercepted. See the Apple II Reference Manual
@@ -74,8 +77,9 @@ func run(env *environment) {
 				// of a line
 				env.con.write("\n")
 			}
+			// textPageClear also homes the cursor row CV
+			env.textPageClear()
 			env.setColumn(0)
-			env.mem.Poke(zpCV, 0)
 		}
 	}
 }
@@ -93,6 +97,7 @@ func execCOUT1(env *environment) {
 	switch {
 	case ch == '\r':
 		env.con.write("\n")
+		env.textPageNewLine()
 		env.setColumn(0)
 	case ch == 0x07:
 		env.con.write("\a")
@@ -111,9 +116,11 @@ func execCOUT1(env *environment) {
 		targetCol := env.mem.Peek(zpCH)
 		for env.col < targetCol {
 			env.con.write(" ")
+			env.textPagePutChar(' ')
 			env.col++
 		}
 		env.con.write(string(rune(ch)))
+		env.textPagePutChar(ch)
 		env.setColumn(env.col + 1)
 	default:
 		// Other control chars are ignored
@@ -141,27 +148,53 @@ func execKEYIN(env *environment) {
 		env.stop = true
 		return
 	}
+	if env.uppercase && ch >= 'a' && ch <= 'z' {
+		ch -= 'a' - 'A'
+	}
 	env.cpu.SetAXYP(ch|0x80, x, y, p)
 }
 
 func execGETLN(env *environment, crFirst bool, showPrompt bool) {
 	if crFirst {
 		env.con.write("\n")
+		env.textPageNewLine()
 		env.setColumn(0)
 	}
 	prompt := ""
 	if showPrompt {
 		prompt = string(rune(env.mem.Peek(zpPROMPT) & 0x7f))
 	}
-	line, eof := env.con.readLine(prompt)
-	if eof {
-		env.stop = true
-		return
+	var line string
+	for {
+		var eof bool
+		line, eof = env.con.readLine(prompt)
+		if eof {
+			env.stop = true
+			return
+		}
+		if !env.metaCommand(line) {
+			break
+		}
+		if env.stop {
+			// A meta command like /quit stopped the machine
+			return
+		}
 	}
 	// A control-C pressed while typing would have been consumed as
 	// input by the real GETLN, it must not break the next RUN
 	env.mem.breakPending.Store(false)
+	if env.uppercase {
+		line = strings.ToUpper(line)
+	}
 	env.log(fmt.Sprintf("GETLN() => %q", line))
+
+	// Mirror the prompt and the typed line to the text page, the
+	// real GETLN echoes them through COUT
+	for _, ch := range []uint8(prompt + line) {
+		env.textPagePutChar(ch)
+		env.col++
+	}
+	env.textPageNewLine()
 	if len(line) > inputBufferSize {
 		line = line[:inputBufferSize]
 	}

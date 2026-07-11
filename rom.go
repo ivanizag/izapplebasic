@@ -7,3 +7,10 @@ import _ "embed"
 //
 //go:embed original/Apple2_Plus.rom
 var embeddedROM []uint8
+
+// The character generator ROM with the character bitmaps, used to
+// render the text screen on the snapshots. Same one used in
+// izapple2.
+//
+//go:embed original/Apple2rev7CharGen.rom
+var embeddedCharGen []uint8

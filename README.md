@@ -57,6 +57,23 @@ cursor for `HTAB` and the comma print zones just by changing `CH`
 (0x24). The output here is a stream, so the interception tracks the
 host column and pads with spaces when `CH` jumps forward.
 
+The intercepted output is also mirrored to the text page memory at
+0x0400, respecting the text window, so the screen snapshots show the
+session as a real Apple II would.
+
+## Meta commands
+
+Lines starting with `/` are processed on the host, they never reach
+the emulated machine:
+
+- `/help`: list the meta commands
+- `/quit`: exit
+- `/screenshot [filename.png]`: save a PNG image of the emulated screen,
+  rendered with the [izapple2](https://github.com/ivanizag/izapple2)
+  screen module. The video mode softswitches (0xc050-0xc057) are
+  tracked, so `GR` and `HGR` graphics, mixed modes and page 2 are
+  rendered as they would show on the real screen.
+
 ## Frontends
 
 - Command line: readline like input with history recall on the up
@@ -70,6 +87,7 @@ The frontends implement the `console` interface in `console.go`.
 
 - Line based input: `GET` waits for the enter key and takes the
   characters of the line one by one.
-- No graphics, no direct screen memory access, no cassette, no disk.
+- The graphics are only visible through `/screenshot`, there is no
+  live graphics display. No cassette, no disk.
 - Control-C breaks the running BASIC program as on a real Apple II,
   press it twice in fast succession to quit.

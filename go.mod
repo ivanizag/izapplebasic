@@ -8,6 +8,9 @@ require (
 )
 
 require (
+	github.com/ivanizag/izapple2 v0.0.0-20250218104031-a01991dfd2fe // indirect
+	github.com/koron-go/z80 v0.10.1 // indirect
 	github.com/mattn/go-runewidth v0.0.3 // indirect
-	golang.org/x/sys v0.0.0-20211117180635-dee7805ff2e1 // indirect
+	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8 // indirect
+	golang.org/x/sys v0.29.0 // indirect
 )

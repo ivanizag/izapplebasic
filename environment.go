@@ -19,6 +19,7 @@ type environment struct {
 	apiLog      bool
 	apiLogIO    bool
 	clearScreen bool   // clear the host screen on HOME
+	uppercase   bool   // convert the input to uppercase
 	maxCycles   uint64 // stop after this many cycles, 0 for no limit
 
 	lastEscape time.Time
@@ -50,11 +51,12 @@ func (env *environment) escape() {
 // to be assigned to env.con before calling run.
 func newEnvironment(rom []uint8) (*environment, error) {
 	var env environment
-	mem, err := newAppleMemory(rom)
+	mem, err := newAppleMemory(rom, embeddedCharGen)
 	if err != nil {
 		return nil, err
 	}
 	env.mem = mem
+	env.uppercase = true
 	env.cpu = iz6502.NewNMOS6502(mem)
 	patchMonitorTraps(mem)
 	env.cpu.Reset()

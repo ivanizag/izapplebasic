@@ -19,13 +19,11 @@ type consoleLiner struct {
 	env        *environment
 	pendingOut string  // unfinished output line, shown as the prompt
 	pendingIn  []uint8 // chars buffered for readChar()
-	uppercase  bool
 }
 
-func newConsoleLiner(env *environment, uppercase bool) *consoleLiner {
+func newConsoleLiner(env *environment) *consoleLiner {
 	var c consoleLiner
 	c.env = env
-	c.uppercase = uppercase
 	c.liner = liner.NewLiner()
 	c.liner.SetCtrlCAborts(true)
 	if f, err := os.Open(historyFilename); err == nil {
@@ -66,9 +64,6 @@ func (c *consoleLiner) readLine(prompt string) (string, bool) {
 	}
 	if line != "" {
 		c.liner.AppendHistory(line)
-	}
-	if c.uppercase {
-		line = strings.ToUpper(line)
 	}
 	return line, false
 }
