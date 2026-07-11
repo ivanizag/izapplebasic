@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/go-telegram/bot v1.22.0 // indirect
 	github.com/ivanizag/izapple2 v0.0.0-20250218104031-a01991dfd2fe // indirect
 	github.com/koron-go/z80 v0.10.1 // indirect
 	github.com/mattn/go-runewidth v0.0.3 // indirect

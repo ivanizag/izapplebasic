@@ -1,31 +1,25 @@
-package main
+package izapplebasic
 
 import (
-	"os"
-	"path/filepath"
+	"bytes"
 	"strings"
 	"testing"
 )
 
-func writeFile(filename string, content string) error {
-	return os.WriteFile(filename, []byte(content), 0644)
-}
-
 func TestStateRoundTrip(t *testing.T) {
-	filename := filepath.Join(t.TempDir(), "test.state")
-
 	env1, _ := testEnvironment(t, nil)
 	env1.mem.Poke(0x1234, 0xda)
 	env1.mem.Peek(ioGraphics)
 	env1.mem.Peek(ioHiRes)
 	env1.cpu.SetPC(0xabcd)
 	env1.col = 7
-	if err := env1.saveState(filename); err != nil {
+	var buf bytes.Buffer
+	if err := env1.SaveState(&buf); err != nil {
 		t.Fatal(err)
 	}
 
 	env2, _ := testEnvironment(t, nil)
-	if err := env2.loadState(filename); err != nil {
+	if err := env2.LoadState(&buf); err != nil {
 		t.Fatal(err)
 	}
 	if env2.mem.Peek(0x1234) != 0xda {
@@ -42,41 +36,36 @@ func TestStateRoundTrip(t *testing.T) {
 	}
 }
 
-func TestStateBadFile(t *testing.T) {
-	filename := filepath.Join(t.TempDir(), "bad.state")
+func TestStateBadData(t *testing.T) {
 	env, _ := testEnvironment(t, nil)
-
-	if err := env.loadState(filename); err == nil {
-		t.Error("a missing file must be an error")
-	}
-
-	if err := writeFile(filename, "this is not a state file, not at all, no"); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.loadState(filename); err == nil ||
-		!strings.Contains(err.Error(), "not an izapplebasic state file") {
-		t.Errorf("a bad file must be rejected, got: %v", err)
+	err := env.LoadState(strings.NewReader("this is not a state, not at all, no"))
+	if err == nil || !strings.Contains(err.Error(), "not an izapplebasic state") {
+		t.Errorf("bad data must be rejected, got: %v", err)
 	}
 }
 
 func TestStateAcrossSessions(t *testing.T) {
-	filename := filepath.Join(t.TempDir(), "session.state")
-
 	// First session: define a program and a variable, save
-	out := runBasic(t, []string{
+	env1, con1 := testEnvironment(t, []string{
 		`10 PRINT "PERSISTED"`,
 		"X=21",
-		"/save " + filename,
 	})
-	assertContains(t, out, "state saved to "+filename)
+	env1.Run()
+	var buf bytes.Buffer
+	if err := env1.SaveState(&buf); err != nil {
+		t.Fatal(err)
+	}
+	assertContains(t, con1.output, "]X=21")
 
 	// Second session: load and continue where it was left
-	out = runBasic(t, []string{
-		"/load " + filename,
+	env2, con2 := testEnvironment(t, []string{
 		"PRINT X*2",
 		"RUN",
 	})
-	assertContains(t, out, "state loaded from "+filename)
-	assertContains(t, out, "42")
-	assertContains(t, out, "PERSISTED")
+	if err := env2.LoadState(&buf); err != nil {
+		t.Fatal(err)
+	}
+	env2.Run()
+	assertContains(t, con2.output, "42")
+	assertContains(t, con2.output, "PERSISTED")
 }

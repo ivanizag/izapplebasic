@@ -1,23 +1,26 @@
-package main
+package izapplebasic
 
-// console is the interface implemented by the frontends. The
+// Console is the interface implemented by the frontends. The
 // emulation core uses it for all the input and output intercepted
-// from the monitor ROM calls.
-type console interface {
-	// readLine returns a full line of input, without the final CR.
+// from the monitor ROM calls. The core does not touch the host
+// filesystem: anything involving files lives on the frontends.
+type Console interface {
+	// ReadLine returns a full line of input, without the final CR.
 	// The second value is true when there is no more input (EOF).
-	readLine(prompt string) (string, bool)
+	ReadLine(prompt string) (string, bool)
 
-	// readChar returns a single character of input.
+	// ReadChar returns a single character of input.
 	// The second value is true when there is no more input (EOF).
-	readChar() (uint8, bool)
+	ReadChar() (uint8, bool)
 
-	// write sends text to the user.
-	write(string)
+	// Write sends text to the user.
+	Write(string)
 
-	// clear clears the screen, if the frontend supports it.
-	clear()
+	// Clear clears the screen, if the frontend supports it.
+	Clear()
 
-	// close releases the frontend resources.
-	close()
+	// MetaCommand gives the frontend the chance to process an input
+	// line as one of its meta commands, returning true when the
+	// line was consumed and must not reach the emulated machine.
+	MetaCommand(line string) bool
 }

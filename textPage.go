@@ -1,4 +1,4 @@
-package main
+package izapplebasic
 
 /*
 The real COUT1 writes the characters to the text page memory, but it
@@ -27,7 +27,7 @@ text is restricted to the bottom rows, scrolling there must not
 touch the graphics rows. Applesoft GR sets the window to rows 20-23
 and TEXT restores the full screen.
 */
-func (env *environment) textWindow() (uint8, uint8) {
+func (env *Environment) textWindow() (uint8, uint8) {
 	top := env.mem.Peek(zpWNDTOP)
 	bottom := env.mem.Peek(zpWNDBTM)
 	if bottom > textRows || top >= bottom {
@@ -42,7 +42,7 @@ func textPageRowAddress(row uint8) uint16 {
 	return textPage1Address + uint16(row&7)*0x80 + uint16(row>>3)*0x28
 }
 
-func (env *environment) textPagePutChar(ch uint8) {
+func (env *Environment) textPagePutChar(ch uint8) {
 	col := env.col
 	if col >= textColumns {
 		return
@@ -54,10 +54,10 @@ func (env *environment) textPagePutChar(ch uint8) {
 	// The high bit set is a normal char, INVFLG clears bits to make
 	// it inverse (0x3f) or flashing (0x7f)
 	value := (ch | 0x80) & env.mem.Peek(zpINVFLG)
-	env.mem.Poke(textPageRowAddress(row)+uint16(col), value)
+	env.mem.pokeHost(textPageRowAddress(row)+uint16(col), value)
 }
 
-func (env *environment) textPageNewLine() {
+func (env *Environment) textPageNewLine() {
 	_, bottom := env.textWindow()
 	row := env.mem.Peek(zpCV)
 	if row < bottom-1 {
@@ -68,26 +68,26 @@ func (env *environment) textPageNewLine() {
 	env.textPageScroll()
 }
 
-func (env *environment) textPageScroll() {
+func (env *Environment) textPageScroll() {
 	top, bottom := env.textWindow()
 	for row := top; row < bottom-1; row++ {
 		src := textPageRowAddress(row + 1)
 		dst := textPageRowAddress(row)
 		for col := uint16(0); col < textColumns; col++ {
-			env.mem.Poke(dst+col, env.mem.Peek(src+col))
+			env.mem.pokeHost(dst+col, env.mem.Peek(src+col))
 		}
 	}
 	env.textPageClearRow(bottom - 1)
 }
 
-func (env *environment) textPageClearRow(row uint8) {
+func (env *Environment) textPageClearRow(row uint8) {
 	address := textPageRowAddress(row)
 	for col := uint16(0); col < textColumns; col++ {
-		env.mem.Poke(address+col, 0xa0) // space
+		env.mem.pokeHost(address+col, 0xa0) // space
 	}
 }
 
-func (env *environment) textPageClear() {
+func (env *Environment) textPageClear() {
 	top, bottom := env.textWindow()
 	for row := top; row < bottom; row++ {
 		env.textPageClearRow(row)

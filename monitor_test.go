@@ -1,11 +1,11 @@
-package main
+package izapplebasic
 
 import (
 	"strings"
 	"testing"
 )
 
-func testCout(env *environment, ch uint8) {
+func testCout(env *Environment, ch uint8) {
 	_, x, y, p := env.cpu.GetAXYP()
 	env.cpu.SetAXYP(ch|0x80, x, y, p)
 	execCOUT1(env)
@@ -63,16 +63,65 @@ func TestCOUT1BackwardsJumpIgnored(t *testing.T) {
 	}
 }
 
-func TestHOMEIgnoredByDefault(t *testing.T) {
-	out := runBasic(t, []string{"HOME"})
-	if strings.Contains(out, "\f") {
-		t.Error("HOME must not clear the screen by default")
+func TestHOMEClearsTheConsole(t *testing.T) {
+	// The console decides what its Clear does, the frontends may
+	// ignore it. The mock records a form feed.
+	out := runBasic(t, []string{`PRINT "X"`, "HOME"})
+	assertContains(t, out, "\f")
+}
+
+func TestMetaCommandNotSeenByBasic(t *testing.T) {
+	env, con := testEnvironment(t, []string{
+		"/meta",
+		"PRINT 7*6",
+	})
+	metaCalls := 0
+	con.metaFn = func(line string) bool {
+		metaCalls++
+		return true
+	}
+	env.Run()
+	if metaCalls != 1 {
+		t.Errorf("one meta command expected, got %v", metaCalls)
+	}
+	assertContains(t, con.output, "42")
+	if strings.Contains(con.output, "SYNTAX") {
+		t.Errorf("the meta command must not reach Applesoft:\n%s", con.output)
 	}
 }
 
-func TestHOMEClearsWhenEnabled(t *testing.T) {
-	env, con := testEnvironment(t, []string{"HOME"})
-	env.clearScreen = true
-	run(env)
-	assertContains(t, con.output, "\f")
+func TestMetaCommandCanStop(t *testing.T) {
+	env, con := testEnvironment(t, []string{
+		"/quit",
+		"PRINT 123",
+	})
+	con.metaFn = func(line string) bool {
+		env.Stop()
+		return true
+	}
+	env.Run()
+	if strings.Contains(con.output, "123") {
+		t.Errorf("no input must be processed after the stop:\n%s", con.output)
+	}
+}
+
+func TestResetFromMetaCommand(t *testing.T) {
+	env, con := testEnvironment(t, []string{
+		"X=42",
+		"/reset",
+		"PRINT X",
+	})
+	con.metaFn = func(line string) bool {
+		env.Reset()
+		return true
+	}
+	env.Run()
+	// The machine rebooted, X is gone, and the line after the
+	// reset is served by the new boot prompt
+	assertContains(t, con.output, "\n0\n")
+}
+
+func TestLowercaseInput(t *testing.T) {
+	out := runBasic(t, []string{`print 2+2`})
+	assertContains(t, out, "4")
 }

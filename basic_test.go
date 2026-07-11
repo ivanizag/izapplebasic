@@ -1,4 +1,4 @@
-package main
+package izapplebasic
 
 import (
 	"strings"
@@ -158,10 +158,10 @@ func TestBreakInfiniteLoop(t *testing.T) {
 	// Simulate a control-C keypress while the program runs
 	go func() {
 		time.Sleep(10 * time.Millisecond)
-		env.mem.breakPending.Store(true)
+		env.Break()
 	}()
-	run(env)
-	if env.cpu.GetCycles() >= testCyclesLimit {
+	env.Run()
+	if env.Cycles() >= testCyclesLimit {
 		t.Log(con.output)
 		t.Fatal("the program was not interrupted")
 	}
@@ -178,10 +178,10 @@ func TestBreakAtPromptDoesNotBreakNextRun(t *testing.T) {
 	// the program it starts
 	con.onReadLine = func(line string) {
 		if line == "RUN" {
-			env.mem.breakPending.Store(true)
+			env.Break()
 		}
 	}
-	run(env)
+	env.Run()
 	assertContains(t, con.output, "DONE")
 	if strings.Contains(con.output, "BREAK") {
 		t.Errorf("the program must not break:\n%s", con.output)

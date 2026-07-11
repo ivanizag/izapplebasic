@@ -1,4 +1,4 @@
-package main
+package izapplebasic
 
 import (
 	"fmt"
@@ -47,9 +47,10 @@ func patchMonitorTraps(mem *appleMemory) {
 	}
 }
 
-// run is the main emulation loop. It executes instructions and
-// intercepts the monitor calls.
-func run(env *environment) {
+// Run is the main emulation loop. It executes instructions and
+// intercepts the monitor calls, until there is no more input or
+// Stop is called.
+func (env *Environment) Run() {
 	for !env.stop {
 		/*
 			The traps are processed before executing the instruction
@@ -71,13 +72,11 @@ func run(env *environment) {
 			execGETLN(env, false, false)
 		case addrHOME:
 			env.log("HOME()")
-			if env.clearScreen {
-				env.con.clear()
-			} else if env.col > 0 {
-				// Not clearing, but the cursor moves to the start
-				// of a line
-				env.con.write("\n")
+			if env.col > 0 {
+				// The cursor moves to the start of a line
+				env.con.Write("\n")
 			}
+			env.con.Clear()
 			// textPageClear also homes the cursor row CV
 			env.textPageClear()
 			env.setColumn(0)
@@ -87,16 +86,20 @@ func run(env *environment) {
 		}
 
 		env.cpu.ExecuteInstruction()
-		if env.maxCycles != 0 && env.cpu.GetCycles() >= env.maxCycles {
+		if env.BreakCycles != 0 && env.cpu.GetCycles() >= env.BreakCycles {
+			// The program has been running for too long, break it
+			env.mem.breakPending.Store(true)
+		}
+		if env.MaxCycles != 0 && env.cpu.GetCycles() >= env.MaxCycles {
 			env.stop = true
 		}
 	}
 }
 
-func execCOUT1(env *environment) {
+func execCOUT1(env *Environment) {
 	a, _, _, _ := env.cpu.GetAXYP()
 	ch := a & 0x7f
-	if env.apiLogIO {
+	if env.TraceMonitorIO {
 		if ch >= 0x20 && ch < 0x7f {
 			env.logIO(fmt.Sprintf("COUT1($%02X '%c')", a, ch))
 		} else {
@@ -105,13 +108,13 @@ func execCOUT1(env *environment) {
 	}
 	switch {
 	case ch == '\r':
-		env.con.write("\n")
+		env.con.Write("\n")
 		env.textPageNewLine()
 		env.setColumn(0)
 	case ch == 0x07:
-		env.con.write("\a")
+		env.con.Write("\a")
 	case ch == 0x08:
-		env.con.write("\b")
+		env.con.Write("\b")
 		if env.col > 0 {
 			env.setColumn(env.col - 1)
 		}
@@ -124,11 +127,11 @@ func execCOUT1(env *environment) {
 		*/
 		targetCol := env.mem.Peek(zpCH)
 		for env.col < targetCol {
-			env.con.write(" ")
+			env.con.Write(" ")
 			env.textPagePutChar(' ')
 			env.col++
 		}
-		env.con.write(string(rune(ch)))
+		env.con.Write(string(rune(ch)))
 		env.textPagePutChar(ch)
 		env.setColumn(env.col + 1)
 	default:
@@ -138,12 +141,12 @@ func execCOUT1(env *environment) {
 
 // setColumn keeps the host column and the monitor cursor position
 // CH in sync. Applesoft uses CH for TAB() and the print zones.
-func (env *environment) setColumn(col uint8) {
+func (env *Environment) setColumn(col uint8) {
 	env.col = col
 	env.mem.Poke(zpCH, col)
 }
 
-func execKEYIN(env *environment) {
+func execKEYIN(env *Environment) {
 	env.log("KEYIN()")
 	_, x, y, p := env.cpu.GetAXYP()
 	if env.mem.breakPending.Swap(false) {
@@ -152,58 +155,82 @@ func execKEYIN(env *environment) {
 		env.cpu.SetAXYP(0x83, x, y, p)
 		return
 	}
-	ch, eof := env.con.readChar()
+	ch, eof := env.con.ReadChar()
 	if eof {
 		env.stop = true
 		return
 	}
-	if env.uppercase && ch >= 'a' && ch <= 'z' {
+	if env.Uppercase && ch >= 'a' && ch <= 'z' {
 		ch -= 'a' - 'A'
 	}
 	env.cpu.SetAXYP(ch|0x80, x, y, p)
 }
 
-func execGETLN(env *environment, crFirst bool, showPrompt bool) {
-	if crFirst {
-		env.con.write("\n")
-		env.textPageNewLine()
-		env.setColumn(0)
-	}
+func execGETLN(env *Environment, crFirst bool, showPrompt bool) {
 	prompt := ""
 	if showPrompt {
 		prompt = string(rune(env.mem.Peek(zpPROMPT) & 0x7f))
 	}
+	if !env.promptShown {
+		if crFirst {
+			env.con.Write("\n")
+			env.textPageNewLine()
+			env.setColumn(0)
+		}
+		/*
+			Mirror the prompt to the text page right away: the
+			snapshots taken while waiting for input show it, as a
+			real Apple II would. promptShown avoids doing it twice
+			when this same wait is resumed on a restored state.
+		*/
+		for _, ch := range []uint8(prompt) {
+			env.textPagePutChar(ch)
+			env.col++
+		}
+		env.promptShown = true
+	}
+	entryPC, _ := env.cpu.GetPCAndSP()
 	var line string
 	for {
 		var eof bool
-		line, eof = env.con.readLine(prompt)
+		line, eof = env.con.ReadLine(prompt)
 		if eof {
 			env.stop = true
 			return
 		}
-		if !env.metaCommand(line) {
+		if !env.con.MetaCommand(line) {
 			break
 		}
 		if env.stop {
-			// A meta command like /quit stopped the machine
+			// A meta command stopped the machine
+			return
+		}
+		if pc, _ := env.cpu.GetPCAndSP(); pc != entryPC {
+			/*
+				A meta command like a reset or a state load moved the
+				CPU: this GETLN wait no longer exists. Return without
+				serving input, the run loop dispatches on the new PC.
+			*/
 			return
 		}
 	}
+	env.promptShown = false
 	// A control-C pressed while typing would have been consumed as
 	// input by the real GETLN, it must not break the next RUN
 	env.mem.breakPending.Store(false)
-	if env.uppercase {
+	if env.Uppercase {
 		line = strings.ToUpper(line)
 	}
 	env.log(fmt.Sprintf("GETLN() => %q", line))
 
-	// Mirror the prompt and the typed line to the text page, the
-	// real GETLN echoes them through COUT
-	for _, ch := range []uint8(prompt + line) {
+	// Mirror the typed line to the text page, the real GETLN echoes
+	// it through COUT. The prompt is already there.
+	for _, ch := range []uint8(line) {
 		env.textPagePutChar(ch)
 		env.col++
 	}
 	env.textPageNewLine()
+
 	if len(line) > inputBufferSize {
 		line = line[:inputBufferSize]
 	}

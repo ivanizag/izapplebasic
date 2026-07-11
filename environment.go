@@ -1,76 +1,128 @@
-package main
+package izapplebasic
 
 import (
 	"fmt"
-	"os"
-	"time"
 
 	"github.com/ivanizag/iz6502"
 )
 
-const controlCDelayToQuitMs = 500
+// Environment is an Apple II+ running Applesoft BASIC with the
+// console I/O intercepted.
+type Environment struct {
+	cpu *iz6502.State
+	mem *appleMemory
+	con Console
+	col uint8 // column position on the host output
 
-type environment struct {
-	cpu         *iz6502.State
-	mem         *appleMemory
-	con         console
-	col         uint8 // column position on the host output
-	stop        bool
-	apiLog      bool
-	apiLogIO    bool
-	clearScreen bool   // clear the host screen on HOME
-	uppercase   bool   // convert the input to uppercase
-	maxCycles   uint64 // stop after this many cycles, 0 for no limit
+	// promptShown tracks if the prompt of the GETLN currently
+	// waiting is already mirrored on the text page
+	promptShown bool
 
-	lastEscape time.Time
+	stop bool
+
+	// Uppercase converts the input to uppercase, as the Apple II+
+	// keyboard would
+	Uppercase bool
+
+	// TraceMonitor dumps the intercepted monitor calls, and
+	// TraceMonitorIO also the char output ones
+	TraceMonitor   bool
+	TraceMonitorIO bool
+
+	// MaxCycles stops the emulation after this many cycles, 0 for
+	// no limit
+	MaxCycles uint64
+
+	// BreakCycles injects a control-C when reached, to break BASIC
+	// programs running for too long. 0 for no limit.
+	BreakCycles uint64
 }
 
-/*
-escape processes a control-C press: two in fast succession quit,
-a single one presents a control-C keypress to the emulated machine
-to break the running BASIC program.
-
-It is called from the signal handler goroutine, and directly by the
-liner console when editing a line, as liner has the terminal in raw
-mode and control-C does not raise a signal there.
-*/
-func (env *environment) escape() {
-	timestamp := time.Now()
-	delay := timestamp.Sub(env.lastEscape)
-	if delay.Milliseconds() < controlCDelayToQuitMs {
-		// Two control-c in fast succession, quit
-		env.con.close()
-		fmt.Println()
-		os.Exit(0)
+// NewEnvironment builds the machine with the given ROM, or the
+// embedded Apple II+ ROM when nil. The console has to be set with
+// SetConsole before calling Run.
+func NewEnvironment(rom []uint8) (*Environment, error) {
+	if rom == nil {
+		rom = embeddedROM
 	}
-	env.lastEscape = timestamp
-	env.mem.breakPending.Store(true)
-}
-
-// newEnvironment builds the machine. The console is not set, it has
-// to be assigned to env.con before calling run.
-func newEnvironment(rom []uint8) (*environment, error) {
-	var env environment
+	var env Environment
 	mem, err := newAppleMemory(rom, embeddedCharGen)
 	if err != nil {
 		return nil, err
 	}
 	env.mem = mem
-	env.uppercase = true
+	env.Uppercase = true
 	env.cpu = iz6502.NewNMOS6502(mem)
 	patchMonitorTraps(mem)
 	env.cpu.Reset()
 	return &env, nil
 }
 
-func (env *environment) log(msg string) {
-	if env.apiLog {
+// SetConsole attaches the frontend.
+func (env *Environment) SetConsole(con Console) {
+	env.con = con
+}
+
+// Stop makes Run return at the next instruction.
+func (env *Environment) Stop() {
+	env.stop = true
+}
+
+// Break presents a control-C keypress to the emulated machine, to
+// break a running BASIC program. Safe to call from any goroutine.
+func (env *Environment) Break() {
+	env.mem.breakPending.Store(true)
+}
+
+// Reset takes the machine back to a cold boot: the RAM is cleared
+// and the CPU restarts on the reset vector.
+func (env *Environment) Reset() {
+	for i := range env.mem.data[:ioAreaStart] {
+		env.mem.data[i] = 0
+	}
+	env.mem.textMode = true
+	env.mem.mixedMode = false
+	env.mem.page2 = false
+	env.mem.hiResMode = false
+	env.mem.breakPending.Store(false)
+	env.cpu.Reset()
+	env.col = 0
+	env.promptShown = false
+}
+
+// Cycles returns the CPU cycles executed so far.
+func (env *Environment) Cycles() uint64 {
+	return env.cpu.GetCycles()
+}
+
+// SetTraceCPU dumps the CPU execution operations.
+func (env *Environment) SetTraceCPU(trace bool) {
+	env.cpu.SetTrace(trace)
+}
+
+// SetTraceIO dumps the accesses to the softswitches at 0xc0xx.
+func (env *Environment) SetTraceIO(trace bool) {
+	env.mem.traceIO = trace
+}
+
+// GraphicsDirty reports if the emulated code drew graphics since
+// the last call to ClearGraphicsDirty.
+func (env *Environment) GraphicsDirty() bool {
+	return env.mem.graphicsDirty
+}
+
+func (env *Environment) ClearGraphicsDirty() {
+	env.mem.graphicsDirty = false
+}
+
+func (env *Environment) log(msg string) {
+	if env.TraceMonitor {
 		fmt.Printf("[[[%s]]]\n", msg)
 	}
 }
 
-func (env *environment) logIO(msg string) {
-	if env.apiLogIO {
+func (env *Environment) logIO(msg string) {
+	if env.TraceMonitorIO {
 		fmt.Printf("[[[%s]]]\n", msg)
 	}
 }

@@ -1,5 +1,10 @@
 .claude/
-izapplebasic
+/izapplebasic
+/izapplebasic-telegram
+/cmd/izapplebasic/izapplebasic
+/cmd/izapplebasic-telegram/izapplebasic-telegram
 .izapplebasichistory
 todo.md
 izapplebasic.state
+screenshot-*.png
+telegram-data/

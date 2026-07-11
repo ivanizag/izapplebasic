@@ -1,4 +1,4 @@
-package main
+package izapplebasic
 
 import _ "embed"
 

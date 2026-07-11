@@ -5,7 +5,16 @@ ROM on the [iz6502](https://github.com/ivanizag/iz6502) emulated CPU
 and intercepts the monitor calls to use the modern computer
 interfaces, in the spirit of [bbz](https://github.com/ivanizag/bbz).
 
-## Usage
+The project is a Go library with the emulation core, package
+`izapplebasic` at the root, and two frontends in `cmd`: the command
+line `izapplebasic` and the `izapplebasic-telegram` bot. All the
+filesystem access happens on the frontends.
+
+```
+go install github.com/ivanizag/izapplebasic/cmd/...@latest
+```
+
+## Command line usage
 
 ```
 izapplebasic
@@ -51,7 +60,8 @@ intercepted when the program counter reaches them:
 - `KEYIN` (0xfd1b): char input, used by `GET`
 - `GETLNZ`, `GETLN`, `GETLN1` (0xfd67, 0xfd6a, 0xfd6f): line input,
   used by the direct mode prompt and `INPUT`
-- `HOME` (0xfc58): clear the screen, ignored unless `-home` is given
+- `HOME` (0xfc58): clear the screen, on the command line ignored
+  unless `-home` is given
 
 On a real Apple II the screen is random access: Applesoft moves the
 cursor for `HTAB` and the comma print zones just by changing `CH`
@@ -64,8 +74,8 @@ session as a real Apple II would.
 
 ## Meta commands
 
-Lines starting with `/` are processed on the host, they never reach
-the emulated machine:
+Lines starting with `/` are processed by the frontend, they never
+reach the emulated machine. On the command line:
 
 - `/help`: list the meta commands
 - `/quit`: exit
@@ -84,9 +94,46 @@ the emulated machine:
 - Command line: readline like input with history recall on the up
   and down arrows, saved in `.izapplebasichistory`. Falls back to
   plain stdin/stdout when the input is piped or with `-r`.
-- Telegram: planned.
+- Telegram: see below.
 
-The frontends implement the `console` interface in `console.go`.
+The frontends implement the `Console` interface of the core package,
+including their own meta commands: the telegram bot has no way to
+name files on the host.
+
+## Telegram bot
+
+```
+izapplebasic-telegram -token <bot token>
+```
+
+The token comes from [@BotFather](https://t.me/BotFather), by
+argument or in the `TELEGRAM_TOKEN` environment variable. The bot
+connects to Telegram with long polling, no webhook or open port is
+needed.
+
+Every user gets a persistent Apple II: on each message the state is
+loaded from a file, the lines of the message are executed and the
+state is saved back. Multiline messages work, a whole program can be
+pasted at once. A program waiting on `INPUT` or `GET` takes the next
+message as the answer. Programs running longer than the per message
+budget are stopped with the control-C break.
+
+Text replies are monospace. When a command draws GR or HGR graphics
+a snapshot of the screen is attached.
+
+The bot has its own meta commands, registered on Telegram so they
+are suggested when typing `/`:
+
+- `/help`: list the commands
+- `/screenshot`: show an image of the emulated screen
+- `/reset`: reboot the machine, losing everything not saved
+- `/save [name]`, `/load [name]`, `/list` and `/delete [name]`:
+  manage named states, stored on the folder of the user, up to 30
+  per user
+
+Each user has a directory under `-data` (default `telegram-data`)
+with the current state, the named saved states and a log of the
+interaction.
 
 ## Limitations
 

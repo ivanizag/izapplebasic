@@ -1,18 +1,23 @@
-package main
+package izapplebasic
 
-// consoleMock is a console for the tests. It takes the input from a
+import "strings"
+
+// consoleMock is a Console for the tests. It takes the input from a
 // list of lines and collects the output, echoing the input lines to
 // build a transcript similar to what a terminal would show.
 type consoleMock struct {
 	linesIn []string
 	lineIn  int
-	pending []uint8 // chars buffered for readChar()
+	pending []uint8 // chars buffered for ReadChar()
 	output  string
 
 	// onReadLine, if set, is called before each line is returned,
 	// with the line about to be served. Used to inject events at a
 	// precise point of the session.
 	onReadLine func(line string)
+
+	// metaFn, if set, implements MetaCommand as a frontend would
+	metaFn func(line string) bool
 }
 
 func newConsoleMock(linesIn []string) *consoleMock {
@@ -31,17 +36,17 @@ func (c *consoleMock) nextLine() (string, bool) {
 	return line, false
 }
 
-func (c *consoleMock) readLine(prompt string) (string, bool) {
-	c.write(prompt)
+func (c *consoleMock) ReadLine(prompt string) (string, bool) {
+	c.Write(prompt)
 	line, eof := c.nextLine()
 	if eof {
 		return "", true
 	}
-	c.write(line + "\n")
+	c.Write(line + "\n")
 	return line, false
 }
 
-func (c *consoleMock) readChar() (uint8, bool) {
+func (c *consoleMock) ReadChar() (uint8, bool) {
 	for len(c.pending) == 0 {
 		line, eof := c.nextLine()
 		if eof {
@@ -54,12 +59,17 @@ func (c *consoleMock) readChar() (uint8, bool) {
 	return ch, false
 }
 
-func (c *consoleMock) write(s string) {
+func (c *consoleMock) Write(s string) {
 	c.output += s
 }
 
-func (c *consoleMock) clear() {
+func (c *consoleMock) Clear() {
 	c.output += "\f"
 }
 
-func (c *consoleMock) close() {}
+func (c *consoleMock) MetaCommand(line string) bool {
+	if c.metaFn != nil && strings.HasPrefix(line, "/") {
+		return c.metaFn(line)
+	}
+	return false
+}

@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	iz "github.com/ivanizag/izapplebasic"
 	"github.com/peterh/liner"
 )
 
@@ -15,15 +16,19 @@ const historyFilename = ".izapplebasichistory"
 // consoleLiner is the command line frontend with readline like
 // editing: up and down arrows recall previous commands.
 type consoleLiner struct {
-	liner      *liner.State
-	env        *environment
-	pendingOut string  // unfinished output line, shown as the prompt
-	pendingIn  []uint8 // chars buffered for readChar()
+	env         *iz.Environment
+	esc         *escaper
+	liner       *liner.State
+	pendingOut  string  // unfinished output line, shown as the prompt
+	pendingIn   []uint8 // chars buffered for ReadChar()
+	clearScreen bool
 }
 
-func newConsoleLiner(env *environment) *consoleLiner {
+func newConsoleLiner(env *iz.Environment, esc *escaper, clearScreen bool) *consoleLiner {
 	var c consoleLiner
 	c.env = env
+	c.esc = esc
+	c.clearScreen = clearScreen
 	c.liner = liner.NewLiner()
 	c.liner.SetCtrlCAborts(true)
 	if f, err := os.Open(historyFilename); err == nil {
@@ -33,7 +38,7 @@ func newConsoleLiner(env *environment) *consoleLiner {
 	return &c
 }
 
-func (c *consoleLiner) readLine(prompt string) (string, bool) {
+func (c *consoleLiner) ReadLine(prompt string) (string, bool) {
 	/*
 		Text pending on the current line, like the prompts that
 		Applesoft sends char by char with COUT, has to be handled by
@@ -52,7 +57,7 @@ func (c *consoleLiner) readLine(prompt string) (string, bool) {
 			mode and no signal is raised, process the escape here to
 			keep the double press to quit working.
 		*/
-		c.env.escape()
+		c.esc.escape()
 		return "", false
 	}
 	if errors.Is(err, io.EOF) {
@@ -68,9 +73,9 @@ func (c *consoleLiner) readLine(prompt string) (string, bool) {
 	return line, false
 }
 
-func (c *consoleLiner) readChar() (uint8, bool) {
+func (c *consoleLiner) ReadChar() (uint8, bool) {
 	for len(c.pendingIn) == 0 {
-		line, eof := c.readLine("")
+		line, eof := c.ReadLine("")
 		if eof {
 			return 0, true
 		}
@@ -81,7 +86,7 @@ func (c *consoleLiner) readChar() (uint8, bool) {
 	return ch, false
 }
 
-func (c *consoleLiner) write(s string) {
+func (c *consoleLiner) Write(s string) {
 	fmt.Print(s)
 	if i := strings.LastIndexByte(s, '\n'); i >= 0 {
 		c.pendingOut = s[i+1:]
@@ -90,9 +95,15 @@ func (c *consoleLiner) write(s string) {
 	}
 }
 
-func (c *consoleLiner) clear() {
-	fmt.Print("\033[2J\033[H")
-	c.pendingOut = ""
+func (c *consoleLiner) Clear() {
+	if c.clearScreen {
+		fmt.Print("\033[2J\033[H")
+		c.pendingOut = ""
+	}
+}
+
+func (c *consoleLiner) MetaCommand(line string) bool {
+	return metaCommand(c.env, c, line)
 }
 
 func (c *consoleLiner) close() {

@@ -1,4 +1,4 @@
-package main
+package izapplebasic
 
 import (
 	"fmt"
@@ -47,6 +47,12 @@ type appleMemory struct {
 	mixedMode bool
 	page2     bool
 	hiResMode bool
+
+	// graphicsDirty is set when the emulated code writes to the
+	// graphics memory: the hires pages, or the lores page while in
+	// a graphics mode. The frontends use it to know when to show a
+	// snapshot.
+	graphicsDirty bool
 
 	// breakPending presents a control-C keypress on the keyboard
 	// softswitch. Applesoft polls it between statements to break a
@@ -124,6 +130,18 @@ func (m *appleMemory) Poke(address uint16, value uint8) {
 		// The ROM is not writable
 		return
 	}
+	if address >= hiResPage1Address && address < hiResPage2Address+hiResPageSize {
+		m.graphicsDirty = true
+	} else if !m.textMode && address >= textPage1Address && address < textPage1Address+textPageSize {
+		m.graphicsDirty = true
+	}
+	m.data[address] = value
+}
+
+// pokeHost writes to the memory without the side effects of Poke.
+// Used by the host text page mirroring, that must not mark the
+// graphics as dirty.
+func (m *appleMemory) pokeHost(address uint16, value uint8) {
 	m.data[address] = value
 }
 

@@ -1,4 +1,4 @@
-package main
+package izapplebasic
 
 import (
 	"strings"
@@ -10,15 +10,15 @@ const testCyclesLimit = 200_000_000
 
 // testEnvironment builds an environment ready to run with a mock
 // console fed with the given input lines.
-func testEnvironment(t *testing.T, linesIn []string) (*environment, *consoleMock) {
+func testEnvironment(t *testing.T, linesIn []string) (*Environment, *consoleMock) {
 	t.Helper()
 	con := newConsoleMock(linesIn)
-	env, err := newEnvironment(embeddedROM)
+	env, err := NewEnvironment(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	env.con = con
-	env.maxCycles = testCyclesLimit
+	env.SetConsole(con)
+	env.MaxCycles = testCyclesLimit
 	return env, con
 }
 
@@ -27,8 +27,8 @@ func testEnvironment(t *testing.T, linesIn []string) (*environment, *consoleMock
 func runBasic(t *testing.T, linesIn []string) string {
 	t.Helper()
 	env, con := testEnvironment(t, linesIn)
-	run(env)
-	if env.cpu.GetCycles() >= testCyclesLimit {
+	env.Run()
+	if env.Cycles() >= testCyclesLimit {
 		t.Log(con.output)
 		t.Fatal("the program did not finish within the cycles limit")
 	}

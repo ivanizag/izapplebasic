@@ -1,3 +1,5 @@
+github.com/go-telegram/bot v1.22.0 h1:zK29OoTYMmR5emJrCtGa2SjaGleeZiUB/C1i7kc2lXE=
+github.com/go-telegram/bot v1.22.0/go.mod h1:i2TRs7fXWIeaceF3z7KzsMt/he0TwkVC680mvdTFYeM=
 github.com/ivanizag/iz6502 v1.5.0 h1:hWNfjuZHbSjBZr1lzlFNgF6O1gCI/1NIHaQwa+W2+cQ=
 github.com/ivanizag/iz6502 v1.5.0/go.mod h1:h4gbw3IK6WCYawi00kBhQ4ACeQkGWgqbUeAgDaQpy6s=
 github.com/ivanizag/izapple2 v0.0.0-20250218104031-a01991dfd2fe h1:Y6+mgj04FNP/qbftZhxrZ/2PwYY2LZttbQqznHQeRJk=

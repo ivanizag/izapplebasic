@@ -1,6 +1,7 @@
-package main
+package izapplebasic
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -75,7 +76,7 @@ func textPageString(m *appleMemory) string {
 
 func TestTextPageMirror(t *testing.T) {
 	env, _ := testEnvironment(t, []string{`PRINT "SNAPSHOT TEST"`})
-	run(env)
+	env.Run()
 	content := textPageString(env.mem)
 	assertContains(t, content, "]PRINT \"SNAPSHOT TEST\"")
 	assertContains(t, content, "\nSNAPSHOT TEST ")
@@ -88,7 +89,7 @@ func TestTextPageScroll(t *testing.T) {
 		"30 NEXT",
 		"RUN",
 	})
-	run(env)
+	env.Run()
 	content := textPageString(env.mem)
 	// The first lines have scrolled out of the 24 rows
 	if strings.Contains(content, "]RUN") {
@@ -112,7 +113,7 @@ func TestTextWindowPreservesGraphics(t *testing.T) {
 		"30 NEXT",
 		"RUN",
 	})
-	run(env)
+	env.Run()
 	// The first lores column must still hold the color 9 pattern
 	if env.mem.Peek(textPage1Address) != 0x99 {
 		t.Errorf("the graphics must not be touched by the text scroll, got %02x",
@@ -120,9 +121,45 @@ func TestTextWindowPreservesGraphics(t *testing.T) {
 	}
 }
 
+func TestPromptOnTextPageWhileWaiting(t *testing.T) {
+	// The machine is waiting for input: a snapshot must show the
+	// prompt, as a real Apple II would
+	env, _ := testEnvironment(t, nil)
+	env.Run()
+	content := textPageString(env.mem)
+	assertContains(t, content, "\n]")
+}
+
+func TestPromptNotDuplicatedOnResume(t *testing.T) {
+	env1, _ := testEnvironment(t, nil)
+	env1.Run()
+	var buf bytes.Buffer
+	if err := env1.SaveState(&buf); err != nil {
+		t.Fatal(err)
+	}
+
+	// The restored session serves the same GETLN wait, the prompt
+	// must not be mirrored a second time
+	env2, _ := testEnvironment(t, []string{"PRINT 1"})
+	if err := env2.LoadState(&buf); err != nil {
+		t.Fatal(err)
+	}
+	env2.Run()
+	content := textPageString(env2.mem)
+	assertContains(t, content, "]PRINT 1")
+	/*
+		Exactly three: the "APPLE ][" banner, the "]PRINT 1" line,
+		and the prompt of the new wait for input. A duplicated
+		prompt on the resume would add a fourth.
+	*/
+	if strings.Count(content, "]") != 3 {
+		t.Errorf("duplicated prompt:\n%s", content)
+	}
+}
+
 func TestTextSnapshot(t *testing.T) {
 	env, _ := testEnvironment(t, []string{`PRINT "SNAPSHOT TEST"`})
-	run(env)
+	env.Run()
 	img := screen.Snapshot(env.mem, screen.ScreenModeGreen)
 	if img == nil {
 		t.Fatal("no image generated")

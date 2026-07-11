@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
+
+	iz "github.com/ivanizag/izapplebasic"
 )
 
 func main() {
@@ -48,7 +48,7 @@ func main() {
 
 	flag.Parse()
 
-	rom := embeddedROM
+	var rom []uint8
 	if *romFilename != "" {
 		var err error
 		rom, err = os.ReadFile(*romFilename)
@@ -58,39 +58,49 @@ func main() {
 		}
 	}
 
-	env, err := newEnvironment(rom)
+	env, err := iz.NewEnvironment(rom)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+	env.Uppercase = !*noUppercase
+	env.TraceMonitor = *traceMonitor || *traceMonitorFull
+	env.TraceMonitorIO = *traceMonitorFull
+	env.SetTraceIO(*traceIO)
+	env.SetTraceCPU(*traceCPU)
+
+	esc := newEscaper(env)
+	var con console
 	if *rawline || !stdinIsTerminal() {
-		env.con = newConsoleStdio()
+		con = newConsoleStdio(env, *clearScreen)
 	} else {
-		env.con = newConsoleLiner(env)
+		con = newConsoleLiner(env, esc, *clearScreen)
 	}
-	defer env.con.close()
-	env.uppercase = !*noUppercase
-	env.apiLog = *traceMonitor || *traceMonitorFull
-	env.apiLogIO = *traceMonitorFull
-	env.clearScreen = *clearScreen
-	env.mem.traceIO = *traceIO
-	env.cpu.SetTrace(*traceCPU)
+	env.SetConsole(con)
+	esc.closeFn = con.close
+	defer con.close()
 
 	if *loadFilename != "" {
-		err := env.loadState(*loadFilename)
+		err := loadStateFile(env, *loadFilename)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	}
 
-	handleControlC(env)
+	handleControlC(esc)
 
 	fmt.Println("izapplebasic - Applesoft BASIC on modern hardware, https://github.com/ivanizag/izapplebasic")
 	fmt.Println("(type /help for the meta commands, press control-c twice to exit)")
 
-	run(env)
+	env.Run()
 	fmt.Println()
+}
+
+// console extends the core Console interface with the local cleanup.
+type console interface {
+	iz.Console
+	close()
 }
 
 // stdinIsTerminal returns false when the input is piped or
@@ -101,16 +111,4 @@ func stdinIsTerminal() bool {
 		return false
 	}
 	return stat.Mode()&os.ModeCharDevice != 0
-}
-
-// handleControlC breaks the running BASIC program on control-C
-// instead of killing the process. Two in fast succession quit.
-func handleControlC(env *environment) {
-	c := make(chan os.Signal, 2)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
-	go func() {
-		for range c {
-			env.escape()
-		}
-	}()
 }
