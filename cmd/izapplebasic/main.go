@@ -45,8 +45,17 @@ func main() {
 		"load",
 		"",
 		"load the emulation state from a file on startup")
+	tapeName := flag.String(
+		"tape",
+		"default",
+		"name of the cassette tape inserted on startup")
 
 	flag.Parse()
+
+	if !validTapeName.MatchString(*tapeName) {
+		fmt.Fprintln(os.Stderr, "Error: invalid tape name, use up to 30 letters, digits, - or _")
+		os.Exit(1)
+	}
 
 	var rom []uint8
 	if *romFilename != "" {
@@ -70,11 +79,14 @@ func main() {
 	env.SetTraceCPU(*traceCPU)
 
 	esc := newEscaper(env)
+	tape := newTapeDrive(".")
+	tape.name = *tapeName
+	tape.trace = *traceMonitor || *traceMonitorFull
 	var con console
 	if *rawline || !stdinIsTerminal() {
-		con = newConsoleStdio(env, *clearScreen)
+		con = newConsoleStdio(env, tape, *clearScreen)
 	} else {
-		con = newConsoleLiner(env, esc, *clearScreen)
+		con = newConsoleLiner(env, tape, esc, *clearScreen)
 	}
 	env.SetConsole(con)
 	esc.closeFn = con.close

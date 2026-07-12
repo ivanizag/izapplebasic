@@ -46,6 +46,8 @@ Options:
 - `-l`: do not convert the input to uppercase
 - `-r`: disable the readline like input with history
 - `-load <file>`: load the emulation state from a file on startup
+- `-tape <name>`: name of the cassette tape inserted on startup
+  (default: `default`)
 
 ## How it works
 
@@ -88,6 +90,36 @@ reach the emulated machine. On the command line:
   screen module. The video mode softswitches (0xc050-0xc057) are
   tracked, so `GR` and `HGR` graphics, mixed modes and page 2 are
   rendered as they would show on the real screen.
+- `/tape [name]` and `/rewind [block]`: manage the emulated cassette
+  deck, see below.
+
+## The cassette
+
+The monitor tape routines, `WRITE` (0xfecd) and `READ` (0xfefd), are
+intercepted too, so `SAVE`, `LOAD`, `STORE`, `RECALL` and `SHLOAD`
+work. Each monitor call is one checksummed record on a real tape,
+here one block stored as the file `tape-NAME-nn.tape` with the raw
+bytes. Reads and writes happen at the current tape position and
+advance it, `/tape name` inserts another tape rewound to block 0 and
+`/rewind [block]` moves the position. An Applesoft `SAVE` writes two
+blocks, the length header and the program:
+
+```
+]/tape adventure
+tape adventure inserted and rewound
+]10 PRINT "YOU ARE IN A MAZE"
+]SAVE
+]/rewind
+tape adventure at block 0
+]LOAD
+]RUN
+YOU ARE IN A MAZE
+```
+
+The tape operations are silent as on the real machine, the `-m`
+trace shows the blocks being read and written. Reading past the
+last block or a block recorded with a different size shows the
+monitor `ERR`, as a bad tape would.
 
 ## Frontends
 
@@ -130,6 +162,10 @@ are suggested when typing `/`:
 - `/save [name]`, `/load [name]`, `/list` and `/delete [name]`:
   manage named states, stored on the folder of the user, up to 30
   per user
+- `/tape [name]`, `/rewind [block]` and `/deletetape <name>`: the
+  cassette deck for the BASIC `SAVE` and `LOAD`, stored on the
+  folder of the user, up to 30 blocks per user. The inserted tape
+  and its position persist between messages.
 
 Each user has a directory under `-data` (default `telegram-data`)
 with the current state, the named saved states and a log of the
@@ -145,6 +181,6 @@ the token in a `.env` file (`TELEGRAM_TOKEN=...`), create the
 - Line based input: `GET` waits for the enter key and takes the
   characters of the line one by one.
 - The graphics are only visible through `/screenshot`, there is no
-  live graphics display. No cassette, no disk.
+  live graphics display. No disk.
 - Control-C breaks the running BASIC program as on a real Apple II,
   press it twice in fast succession to quit.

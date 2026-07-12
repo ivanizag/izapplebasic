@@ -9,3 +9,4 @@ izapplebasic.state
 screenshot-*.png
 telegram-data/
 .env
+tape-*.tape

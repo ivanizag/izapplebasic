@@ -20,12 +20,19 @@ emulation core has none.
 
 const defaultStateFilename = "izapplebasic.state"
 
-func metaCommand(env *iz.Environment, con iz.Console, line string) bool {
+func metaCommand(env *iz.Environment, con iz.Console, tape *tapeDrive, line string) bool {
 	if !strings.HasPrefix(line, "/") {
 		return false
 	}
 	fields := strings.Fields(line)
 	command := strings.ToLower(fields[0])
+	arg := ""
+	if len(fields) > 1 {
+		arg = fields[1]
+	}
+	if tape.metaCommand(con, command, arg) {
+		return true
+	}
 	switch command {
 	case "/help":
 		con.Write("meta commands:\n")
@@ -34,6 +41,8 @@ func metaCommand(env *iz.Environment, con iz.Console, line string) bool {
 		con.Write("  /save [filename]: save the emulation state\n")
 		con.Write("  /load [filename]: load the emulation state\n")
 		con.Write("  /screenshot [filename.png]: save an image of the emulated screen\n")
+		con.Write("  /tape [name]: insert a cassette tape for SAVE and LOAD, or show it\n")
+		con.Write("  /rewind [block]: move the tape to a block, 0 by default\n")
 
 	case "/quit":
 		env.Stop()

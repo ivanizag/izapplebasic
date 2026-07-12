@@ -163,6 +163,7 @@ func (tf *telegramFrontend) processMessage(userID int64, username string, text s
 		return nil, nil, err
 	}
 	con.env = env
+	con.loadTapePointer()
 	env.SetConsole(con)
 
 	if f, err := os.Open(stateFilename); err == nil {
@@ -179,6 +180,7 @@ func (tf *telegramFrontend) processMessage(userID int64, username string, text s
 	env.ClearGraphicsDirty()
 
 	env.Run()
+	con.saveTapePointer()
 
 	f, err := os.Create(stateFilename)
 	if err != nil {

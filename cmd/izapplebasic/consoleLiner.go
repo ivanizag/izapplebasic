@@ -17,6 +17,7 @@ const historyFilename = ".izapplebasichistory"
 // editing: up and down arrows recall previous commands.
 type consoleLiner struct {
 	env         *iz.Environment
+	tape        *tapeDrive
 	esc         *escaper
 	liner       *liner.State
 	pendingOut  string  // unfinished output line, shown as the prompt
@@ -24,9 +25,10 @@ type consoleLiner struct {
 	clearScreen bool
 }
 
-func newConsoleLiner(env *iz.Environment, esc *escaper, clearScreen bool) *consoleLiner {
+func newConsoleLiner(env *iz.Environment, tape *tapeDrive, esc *escaper, clearScreen bool) *consoleLiner {
 	var c consoleLiner
 	c.env = env
+	c.tape = tape
 	c.esc = esc
 	c.clearScreen = clearScreen
 	c.liner = liner.NewLiner()
@@ -103,7 +105,15 @@ func (c *consoleLiner) Clear() {
 }
 
 func (c *consoleLiner) MetaCommand(line string) bool {
-	return metaCommand(c.env, c, line)
+	return metaCommand(c.env, c, c.tape, line)
+}
+
+func (c *consoleLiner) TapeWrite(data []uint8) {
+	c.tape.write(c, data)
+}
+
+func (c *consoleLiner) TapeRead(requested int) []uint8 {
+	return c.tape.read(c, requested)
 }
 
 func (c *consoleLiner) close() {

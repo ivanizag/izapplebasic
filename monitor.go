@@ -20,6 +20,8 @@ const (
 	addrGETLN  = uint16(0xfd6a) // Prompt, then read a line into 0x200
 	addrGETLN1 = uint16(0xfd6f) // Read a line into 0x200, no prompt
 	addrCOUT1  = uint16(0xfdf0) // Output the char in A to the screen
+	addrWRITE  = uint16(0xfecd) // Write the range A1..A2 to the cassette
+	addrREAD   = uint16(0xfefd) // Read from the cassette into A1..A2
 )
 
 // Monitor zero page usage
@@ -27,6 +29,8 @@ const (
 	zpCH     = uint16(0x24) // Cursor horizontal position
 	zpCV     = uint16(0x25) // Cursor vertical position
 	zpPROMPT = uint16(0x33) // Prompt character for GETLN
+	zpA1L    = uint16(0x3c) // Range start for the monitor commands
+	zpA2L    = uint16(0x3e) // Range end, inclusive
 
 	inputBuffer     = uint16(0x0200)
 	inputBufferSize = 255
@@ -39,6 +43,8 @@ var trapAddresses = []uint16{
 	addrGETLN,
 	addrGETLN1,
 	addrCOUT1,
+	addrWRITE,
+	addrREAD,
 }
 
 func patchMonitorTraps(mem *appleMemory) {
@@ -70,6 +76,10 @@ func (env *Environment) Run() {
 			execGETLN(env, false, true)
 		case addrGETLN1:
 			execGETLN(env, false, false)
+		case addrWRITE:
+			execWRITE(env)
+		case addrREAD:
+			execREAD(env)
 		case addrHOME:
 			env.log("HOME()")
 			if env.col > 0 {

@@ -14,6 +14,7 @@ import (
 // commands of the command line frontend.
 type testConsole struct {
 	env     *iz.Environment
+	tape    *tapeDrive
 	linesIn []string
 	lineIn  int
 	output  string
@@ -36,12 +37,20 @@ func (c *testConsole) Clear()                  {}
 func (c *testConsole) close()                  {}
 
 func (c *testConsole) MetaCommand(line string) bool {
-	return metaCommand(c.env, c, line)
+	return metaCommand(c.env, c, c.tape, line)
+}
+
+func (c *testConsole) TapeWrite(data []uint8) {
+	c.tape.write(c, data)
+}
+
+func (c *testConsole) TapeRead(requested int) []uint8 {
+	return c.tape.read(c, requested)
 }
 
 func runConsole(t *testing.T, linesIn []string) (string, *iz.Environment) {
 	t.Helper()
-	con := &testConsole{linesIn: linesIn}
+	con := &testConsole{linesIn: linesIn, tape: newTapeDrive(t.TempDir())}
 	env, err := iz.NewEnvironment(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -115,6 +124,32 @@ func TestMetaHelp(t *testing.T) {
 	out, _ := runConsole(t, []string{"/help"})
 	assertContains(t, out, "/screenshot")
 	assertContains(t, out, "/save")
+}
+
+func TestMetaTape(t *testing.T) {
+	out, _ := runConsole(t, []string{
+		"/tape game",
+		`10 PRINT "TAPED"`,
+		"SAVE",
+		"/rewind",
+		"NEW",
+		"LOAD",
+		"RUN",
+		"/tape",
+	})
+	assertContains(t, out, "tape game inserted and rewound")
+	assertContains(t, out, "tape game at block 0")
+	assertContains(t, out, "TAPED")
+	assertContains(t, out, "tape game at block 2")
+	// The block operations are silent unless tracing
+	if strings.Contains(out, "wrote block") {
+		t.Errorf("the block operations must be silent:\n%s", out)
+	}
+}
+
+func TestMetaTapeInvalidName(t *testing.T) {
+	out, _ := runConsole(t, []string{"/tape ../evil"})
+	assertContains(t, out, "invalid tape name")
 }
 
 func TestMetaUnknown(t *testing.T) {

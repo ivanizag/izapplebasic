@@ -255,6 +255,78 @@ func TestCleanText(t *testing.T) {
 	}
 }
 
+func TestTelegramTape(t *testing.T) {
+	tf := newTelegramFrontend(t.TempDir())
+	tf.cycleBudget = 4_000_000
+
+	// SAVE on the default tape, LOAD in a later message: the tape
+	// pointer persists between messages
+	out, _ := telegramMessage(t, tf, "10 PRINT \"TAPED\"\nSAVE")
+	assertContains(t, out, "wrote block 0 of tape default")
+	assertContains(t, out, "wrote block 1 of tape default")
+
+	out, _ = telegramMessage(t, tf, "/rewind")
+	assertContains(t, out, "tape default at block 0")
+
+	out, _ = telegramMessage(t, tf, "NEW\nLOAD\nRUN")
+	assertContains(t, out, "read block 0 of tape default")
+	assertContains(t, out, "TAPED")
+
+	// A named tape
+	out, _ = telegramMessage(t, tf, "/tape demo\nSAVE")
+	assertContains(t, out, "tape demo inserted and rewound")
+	assertContains(t, out, "wrote block 0 of tape demo")
+
+	out, _ = telegramMessage(t, tf, "/list")
+	assertContains(t, out, "default (2 blocks)")
+	assertContains(t, out, "demo (2 blocks)")
+
+	out, _ = telegramMessage(t, tf, "/deletetape demo")
+	assertContains(t, out, "tape demo deleted, 2 blocks")
+	out, _ = telegramMessage(t, tf, "/list")
+	if strings.Contains(out, "demo") {
+		t.Errorf("demo must be deleted:\n%s", out)
+	}
+}
+
+func TestTelegramTapeEndOfTape(t *testing.T) {
+	tf := newTelegramFrontend(t.TempDir())
+	tf.cycleBudget = 4_000_000
+
+	out, _ := telegramMessage(t, tf, "LOAD")
+	assertContains(t, out, "end of tape default at block 0")
+	assertContains(t, out, "ERR")
+}
+
+func TestTelegramTapeBlocksLimit(t *testing.T) {
+	tf := newTelegramFrontend(t.TempDir())
+	tf.cycleBudget = 4_000_000
+
+	// Each SAVE writes 2 blocks without moving back, filling the
+	// tape until the limit
+	telegramMessage(t, tf, "10 PRINT 1")
+	for i := 0; i < maxTapeBlocks/2; i++ {
+		out, _ := telegramMessage(t, tf, "SAVE")
+		assertContains(t, out, "wrote block")
+	}
+	out, _ := telegramMessage(t, tf, "SAVE")
+	assertContains(t, out, "/deletetape one first")
+
+	// Overwriting existing blocks is still allowed
+	out, _ = telegramMessage(t, tf, "/rewind\nSAVE")
+	assertContains(t, out, "wrote block 0 of tape default")
+}
+
+func TestTelegramTapeNameValidation(t *testing.T) {
+	tf := newTelegramFrontend(t.TempDir())
+	tf.cycleBudget = 4_000_000
+
+	out, _ := telegramMessage(t, tf, "/tape ../evil")
+	assertContains(t, out, "invalid name")
+	out, _ = telegramMessage(t, tf, "/rewind x")
+	assertContains(t, out, "invalid block number")
+}
+
 func TestChunkString(t *testing.T) {
 	chunks := chunkString("aaa\nbbb\nccc", 7)
 	if len(chunks) != 2 || chunks[0] != "aaa\nbbb" || chunks[1] != "ccc" {

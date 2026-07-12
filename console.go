@@ -23,4 +23,19 @@ type Console interface {
 	// line as one of its meta commands, returning true when the
 	// line was consumed and must not reach the emulated machine.
 	MetaCommand(line string) bool
+
+	/*
+		The frontends emulate the cassette deck as a sequence of
+		blocks: each monitor WRITE call stores one block on the
+		current position of the tape and advances, each READ call
+		returns the block on the current position and advances.
+	*/
+
+	// TapeWrite stores one block on the tape.
+	TapeWrite(data []uint8)
+
+	// TapeRead returns the next block of the tape, or nil when
+	// there is no tape or no more blocks. The requested size is a
+	// hint for the frontend, the caller deals with mismatches.
+	TapeRead(requested int) []uint8
 }

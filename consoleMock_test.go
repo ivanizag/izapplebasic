@@ -18,6 +18,10 @@ type consoleMock struct {
 
 	// metaFn, if set, implements MetaCommand as a frontend would
 	metaFn func(line string) bool
+
+	// An in-memory tape deck
+	tapeBlocks [][]uint8
+	tapePos    int
 }
 
 func newConsoleMock(linesIn []string) *consoleMock {
@@ -72,4 +76,23 @@ func (c *consoleMock) MetaCommand(line string) bool {
 		return c.metaFn(line)
 	}
 	return false
+}
+
+func (c *consoleMock) TapeWrite(data []uint8) {
+	block := append([]uint8{}, data...)
+	if c.tapePos < len(c.tapeBlocks) {
+		c.tapeBlocks[c.tapePos] = block
+	} else {
+		c.tapeBlocks = append(c.tapeBlocks, block)
+	}
+	c.tapePos++
+}
+
+func (c *consoleMock) TapeRead(requested int) []uint8 {
+	if c.tapePos >= len(c.tapeBlocks) {
+		return nil
+	}
+	block := c.tapeBlocks[c.tapePos]
+	c.tapePos++
+	return block
 }

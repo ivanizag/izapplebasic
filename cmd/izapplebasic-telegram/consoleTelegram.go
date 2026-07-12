@@ -29,6 +29,11 @@ type consoleTelegram struct {
 	pendingIn []uint8 // chars buffered for ReadChar()
 	segments  []outSegment
 	images    []image.Image
+
+	// The cassette deck, persisted in the folder of the user
+	// between messages
+	tapeName string
+	tapePos  int
 }
 
 /*
@@ -112,8 +117,11 @@ var telegramCommands = []struct {
 	{"reset", "reboot the machine, losing everything not saved"},
 	{"save", "save the state: /save [name]"},
 	{"load", "load a saved state: /load [name]"},
-	{"list", "list the saved states"},
+	{"list", "list the saved states and tapes"},
 	{"delete", "delete a saved state: /delete [name]"},
+	{"tape", "insert a cassette tape for SAVE and LOAD: /tape [name]"},
+	{"rewind", "move the tape to a block: /rewind [block]"},
+	{"deletetape", "delete a whole tape: /deletetape <name>"},
 }
 
 /*
@@ -160,6 +168,15 @@ func (c *consoleTelegram) MetaCommand(line string) bool {
 
 	case "delete":
 		c.metaDelete(arg)
+
+	case "tape":
+		c.metaTape(arg)
+
+	case "rewind":
+		c.metaRewind(arg)
+
+	case "deletetape":
+		c.metaDeleteTape(arg)
 
 	default:
 		c.notice("unknown command /" + command + ", try /help\n")
@@ -241,13 +258,22 @@ func (c *consoleTelegram) metaLoad(arg string) {
 
 func (c *consoleTelegram) metaList() {
 	names := c.savedStates()
-	if len(names) == 0 {
-		c.notice("no saved states, use /save [name]\n")
+	tapeNames, tapeBlocks := c.tapes()
+	if len(names) == 0 && len(tapeNames) == 0 {
+		c.notice("no saved states or tapes, use /save [name] or the BASIC SAVE\n")
 		return
 	}
-	c.notice("saved states:\n")
-	for _, name := range names {
-		c.notice("  " + name + "\n")
+	if len(names) > 0 {
+		c.notice("saved states:\n")
+		for _, name := range names {
+			c.notice("  " + name + "\n")
+		}
+	}
+	if len(tapeNames) > 0 {
+		c.notice("tapes:\n")
+		for _, name := range tapeNames {
+			c.notice(fmt.Sprintf("  %s (%v blocks)\n", name, tapeBlocks[name]))
+		}
 	}
 }
 
