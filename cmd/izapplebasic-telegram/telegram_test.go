@@ -43,8 +43,9 @@ func TestTelegramOutputKinds(t *testing.T) {
 	tf := newTelegramFrontend(t.TempDir())
 	tf.cycleBudget = 4_000_000
 
-	// Emulator output is monospaced, frontend notices are not,
-	// keeping the order of the exchange
+	// The transcript, input echoed with its prompt plus the
+	// emulator output, is monospaced. The frontend notices are not,
+	// keeping the order of the exchange.
 	segments := telegramSegments(t, tf, "PRINT 1\n/save kinds\nPRINT 2")
 	var kinds []bool
 	for _, segment := range segments {
@@ -53,12 +54,19 @@ func TestTelegramOutputKinds(t *testing.T) {
 	if len(kinds) != 3 || !kinds[0] || kinds[1] || !kinds[2] {
 		t.Errorf("mono, notice, mono expected, got %v", kinds)
 	}
+	assertContains(t, segments[0].text, "]PRINT 1")
+	assertContains(t, segments[0].text, "]/save kinds")
 	assertContains(t, segments[1].text, "state saved as kinds")
+	assertContains(t, segments[2].text, "]PRINT 2")
 
-	// The help is a notice
+	// The echo shows the input as the machine sees it, uppercased
+	segments = telegramSegments(t, tf, "print 3+3")
+	assertContains(t, segments[0].text, "]PRINT 3+3")
+
+	// The echoed command is transcript, the help text is a notice
 	segments = telegramSegments(t, tf, "/help")
 	for _, segment := range segments {
-		if segment.mono && strings.TrimSpace(segment.text) != "" {
+		if segment.mono && strings.Contains(segment.text, "meta commands") {
 			t.Errorf("the help must not be monospaced: %q", segment.text)
 		}
 	}

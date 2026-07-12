@@ -59,6 +59,17 @@ func (c *consoleTelegram) ReadLine(prompt string) (string, bool) {
 	}
 	line := c.linesIn[c.lineIn]
 	c.lineIn++
+	/*
+		Echo the input with its prompt: the reply reads as the
+		transcript a real terminal would show. The machine input is
+		echoed uppercased as the machine will see it, the meta
+		command lines never reach the machine.
+	*/
+	shown := line
+	if c.env.Uppercase && !strings.HasPrefix(line, "/") {
+		shown = strings.ToUpper(line)
+	}
+	c.Write(prompt + shown + "\n")
 	return line, false
 }
 
