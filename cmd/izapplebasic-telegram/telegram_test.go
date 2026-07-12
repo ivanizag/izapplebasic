@@ -55,9 +55,12 @@ func TestTelegramOutputKinds(t *testing.T) {
 		t.Errorf("mono, notice, mono expected, got %v", kinds)
 	}
 	assertContains(t, segments[0].text, "]PRINT 1")
-	assertContains(t, segments[0].text, "]/save kinds")
 	assertContains(t, segments[1].text, "state saved as kinds")
 	assertContains(t, segments[2].text, "]PRINT 2")
+	// The meta command lines are not echoed
+	if strings.Contains(segments[0].text, "/save") {
+		t.Errorf("the meta command must not be echoed:\n%s", segments[0].text)
+	}
 
 	// The echo shows the input as the machine sees it, uppercased
 	segments = telegramSegments(t, tf, "print 3+3")
