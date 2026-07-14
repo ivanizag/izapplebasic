@@ -29,7 +29,7 @@ func newConsoleStdio(env *iz.Environment, tape *tapeDrive, clearScreen bool) *co
 }
 
 func (c *consoleStdio) ReadLine(prompt string) (string, bool) {
-	fmt.Print(prompt)
+	// The prompt was already printed through Write
 	line, err := c.in.ReadString('\n')
 	if err != nil && line == "" {
 		return "", true

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	iz "github.com/ivanizag/izapplebasic"
 	"github.com/peterh/liner"
@@ -20,7 +19,6 @@ type consoleLiner struct {
 	tape        *tapeDrive
 	esc         *escaper
 	liner       *liner.State
-	pendingOut  string  // unfinished output line, shown as the prompt
 	pendingIn   []uint8 // chars buffered for ReadChar()
 	clearScreen bool
 }
@@ -42,17 +40,16 @@ func newConsoleLiner(env *iz.Environment, tape *tapeDrive, esc *escaper, clearSc
 
 func (c *consoleLiner) ReadLine(prompt string) (string, bool) {
 	/*
-		Text pending on the current line, like the prompts that
-		Applesoft sends char by char with COUT, has to be handled by
-		liner to be able to redraw the line while editing.
+		The prompt is the text already printed on the current line,
+		like the "]" of Applesoft or the text of an INPUT: liner
+		redraws it to be able to edit the line.
 	*/
 	fmt.Print("\r")
-	line, err := c.liner.Prompt(c.pendingOut + prompt)
+	line, err := c.liner.Prompt(prompt)
 	if errors.Is(err, liner.ErrInvalidPrompt) {
 		fmt.Println()
 		line, err = c.liner.Prompt("")
 	}
-	c.pendingOut = ""
 	if errors.Is(err, liner.ErrPromptAborted) {
 		/*
 			Control-C while editing: liner has the terminal in raw
@@ -90,17 +87,11 @@ func (c *consoleLiner) ReadChar() (uint8, bool) {
 
 func (c *consoleLiner) Write(s string) {
 	fmt.Print(s)
-	if i := strings.LastIndexByte(s, '\n'); i >= 0 {
-		c.pendingOut = s[i+1:]
-	} else {
-		c.pendingOut += s
-	}
 }
 
 func (c *consoleLiner) Clear() {
 	if c.clearScreen {
 		fmt.Print("\033[2J\033[H")
-		c.pendingOut = ""
 	}
 }
 

@@ -53,8 +53,31 @@ func newConsoleTelegram(dir string, text string) *consoleTelegram {
 	}
 }
 
+/*
+promptPending tells if the prompt still has to be shown: the machine
+printed it through COUT, but only within this message. On a resumed
+wait it belongs to a previous reply, and a meta command notice may
+have separated it from the input it prompts.
+*/
+func (c *consoleTelegram) promptPending(prompt string) bool {
+	n := len(c.segments)
+	return prompt != "" &&
+		(n == 0 || !c.segments[n-1].mono ||
+			!strings.HasSuffix(c.segments[n-1].text, prompt))
+}
+
 func (c *consoleTelegram) ReadLine(prompt string) (string, bool) {
 	if c.lineIn >= len(c.linesIn) {
+		/*
+			The machine is left waiting for input. Close the reply
+			with the pending prompt and a cursor, so it is clear the
+			next message will be taken as input: "]_" on the direct
+			mode, "NAME? _" on an INPUT.
+		*/
+		if c.promptPending(prompt) {
+			c.Write(prompt)
+		}
+		c.Write("_")
 		return "", true
 	}
 	line := c.linesIn[c.lineIn]
@@ -70,7 +93,10 @@ func (c *consoleTelegram) ReadLine(prompt string) (string, bool) {
 		if c.env.Uppercase {
 			shown = strings.ToUpper(shown)
 		}
-		c.Write(prompt + shown + "\n")
+		if c.promptPending(prompt) {
+			c.Write(prompt)
+		}
+		c.Write(shown + "\n")
 	}
 	return line, false
 }

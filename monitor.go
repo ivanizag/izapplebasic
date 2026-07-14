@@ -16,9 +16,7 @@ side and lets the CPU execute the RTS to return to the caller.
 const (
 	addrHOME   = uint16(0xfc58) // Clear the screen
 	addrKEYIN  = uint16(0xfd1b) // Read a key, result in A with the high bit set
-	addrGETLNZ = uint16(0xfd67) // CR, then prompt, then read a line into 0x200
-	addrGETLN  = uint16(0xfd6a) // Prompt, then read a line into 0x200
-	addrGETLN1 = uint16(0xfd6f) // Read a line into 0x200, no prompt
+	addrGETLN1 = uint16(0xfd6f) // Read a line into 0x200
 	addrCOUT1  = uint16(0xfdf0) // Output the char in A to the screen
 	addrWRITE  = uint16(0xfecd) // Write the range A1..A2 to the cassette
 	addrREAD   = uint16(0xfefd) // Read from the cassette into A1..A2
@@ -26,21 +24,25 @@ const (
 
 // Monitor zero page usage
 const (
-	zpCH     = uint16(0x24) // Cursor horizontal position
-	zpCV     = uint16(0x25) // Cursor vertical position
-	zpPROMPT = uint16(0x33) // Prompt character for GETLN
-	zpA1L    = uint16(0x3c) // Range start for the monitor commands
-	zpA2L    = uint16(0x3e) // Range end, inclusive
+	zpCH  = uint16(0x24) // Cursor horizontal position
+	zpCV  = uint16(0x25) // Cursor vertical position
+	zpA1L = uint16(0x3c) // Range start for the monitor commands
+	zpA2L = uint16(0x3e) // Range end, inclusive
 
 	inputBuffer     = uint16(0x0200)
 	inputBufferSize = 255
 )
 
+/*
+Only GETLN1 is intercepted for the line input: the other two entry
+points, GETLNZ (0xfd67) and GETLN (0xfd6a), are real ROM code that
+prints the CR and the prompt through the intercepted COUT and falls
+into GETLN1. This way the prompt reaches the output and the text
+page with no special handling.
+*/
 var trapAddresses = []uint16{
 	addrHOME,
 	addrKEYIN,
-	addrGETLNZ,
-	addrGETLN,
 	addrGETLN1,
 	addrCOUT1,
 	addrWRITE,
@@ -70,12 +72,8 @@ func (env *Environment) Run() {
 			execCOUT1(env)
 		case addrKEYIN:
 			execKEYIN(env)
-		case addrGETLNZ:
-			execGETLN(env, true, true)
-		case addrGETLN:
-			execGETLN(env, false, true)
 		case addrGETLN1:
-			execGETLN(env, false, false)
+			execGETLN(env)
 		case addrWRITE:
 			execWRITE(env)
 		case addrREAD:
@@ -176,29 +174,14 @@ func execKEYIN(env *Environment) {
 	env.cpu.SetAXYP(ch|0x80, x, y, p)
 }
 
-func execGETLN(env *Environment, crFirst bool, showPrompt bool) {
-	prompt := ""
-	if showPrompt {
-		prompt = string(rune(env.mem.Peek(zpPROMPT) & 0x7f))
-	}
-	if !env.promptShown {
-		if crFirst {
-			env.con.Write("\n")
-			env.textPageNewLine()
-			env.setColumn(0)
-		}
-		/*
-			Mirror the prompt to the text page right away: the
-			snapshots taken while waiting for input show it, as a
-			real Apple II would. promptShown avoids doing it twice
-			when this same wait is resumed on a restored state.
-		*/
-		for _, ch := range []uint8(prompt) {
-			env.textPagePutChar(ch)
-			env.col++
-		}
-		env.promptShown = true
-	}
+func execGETLN(env *Environment) {
+	/*
+		The prompt was printed by the caller through COUT: the "]"
+		of Applesoft, the "*" of the monitor, or the text of an
+		INPUT. It is the current line of the screen, reconstructed
+		from the text page so it survives a state save and load.
+	*/
+	prompt := env.currentLine()
 	entryPC, _ := env.cpu.GetPCAndSP()
 	var line string
 	for {
@@ -224,7 +207,6 @@ func execGETLN(env *Environment, crFirst bool, showPrompt bool) {
 			return
 		}
 	}
-	env.promptShown = false
 	// A control-C pressed while typing would have been consumed as
 	// input by the real GETLN, it must not break the next RUN
 	env.mem.breakPending.Store(false)

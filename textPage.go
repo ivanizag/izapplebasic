@@ -94,3 +94,22 @@ func (env *Environment) textPageClear() {
 	}
 	env.mem.Poke(zpCV, top)
 }
+
+// currentLine returns the text of the cursor row up to the cursor
+// column: when input is requested, this is the pending prompt.
+func (env *Environment) currentLine() string {
+	row := env.mem.Peek(zpCV)
+	if row >= textRows {
+		row = textRows - 1
+	}
+	col := int(env.col)
+	if col > textColumns {
+		col = textColumns
+	}
+	address := textPageRowAddress(row)
+	line := make([]uint8, col)
+	for i := 0; i < col; i++ {
+		line[i] = env.mem.Peek(address+uint16(i)) & 0x7f
+	}
+	return string(line)
+}

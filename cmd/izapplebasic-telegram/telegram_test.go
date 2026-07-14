@@ -105,13 +105,19 @@ func TestTelegramPendingInput(t *testing.T) {
 	tf := newTelegramFrontend(t.TempDir())
 	tf.cycleBudget = 4_000_000
 
-	// The program stops at INPUT, the state is saved waiting there
+	// The program stops at INPUT, the state is saved waiting there.
+	// The reply ends with a cursor showing the machine waits.
 	out, _ := telegramMessage(t, tf, "10 INPUT \"NAME? \"; N$\n20 PRINT \"HI \" + N$\nRUN")
-	assertContains(t, out, "NAME? ")
+	assertContains(t, out, "NAME?")
+	if !strings.HasSuffix(out, "_") {
+		t.Errorf("the reply must end with the waiting cursor:\n%s", out)
+	}
 
-	// The next message is the INPUT answer
+	// The next message is the INPUT answer, and the machine is
+	// left back on the prompt
 	out, _ = telegramMessage(t, tf, "IVAN")
 	assertContains(t, out, "HI IVAN")
+	assertContains(t, out, "]_")
 }
 
 func TestTelegramRunawayProgram(t *testing.T) {

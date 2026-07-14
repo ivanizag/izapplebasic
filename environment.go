@@ -14,10 +14,6 @@ type Environment struct {
 	con Console
 	col uint8 // column position on the host output
 
-	// promptShown tracks if the prompt of the GETLN currently
-	// waiting is already mirrored on the text page
-	promptShown bool
-
 	stop bool
 
 	// Uppercase converts the input to uppercase, as the Apple II+
@@ -87,7 +83,6 @@ func (env *Environment) Reset() {
 	env.mem.breakPending.Store(false)
 	env.cpu.Reset()
 	env.col = 0
-	env.promptShown = false
 }
 
 // Cycles returns the CPU cycles executed so far.

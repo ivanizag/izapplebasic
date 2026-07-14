@@ -60,10 +60,12 @@ intercepted when the program counter reaches them:
 
 - `COUT1` (0xfdf0): char output
 - `KEYIN` (0xfd1b): char input, used by `GET`
-- `GETLNZ`, `GETLN`, `GETLN1` (0xfd67, 0xfd6a, 0xfd6f): line input,
-  used by the direct mode prompt and `INPUT`
+- `GETLN1` (0xfd6f): line input, used by the direct mode prompt and
+  `INPUT`. The prompt printing entry points GETLNZ and GETLN are
+  real ROM code running on the intercepted COUT.
 - `HOME` (0xfc58): clear the screen, on the command line ignored
   unless `-home` is given
+- `WRITE` and `READ` (0xfecd, 0xfefd): the cassette tape
 
 On a real Apple II the screen is random access: Applesoft moves the
 cursor for `HTAB` and the comma print zones just by changing `CH`

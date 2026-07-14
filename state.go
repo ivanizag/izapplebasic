@@ -22,11 +22,10 @@ of the frontends.
 const stateMagic = "izapplebasic state v1\n"
 
 const (
-	stateFlagText        = uint8(1)
-	stateFlagMixed       = uint8(2)
-	stateFlagPage2       = uint8(4)
-	stateFlagHiRes       = uint8(8)
-	stateFlagPromptShown = uint8(16)
+	stateFlagText  = uint8(1)
+	stateFlagMixed = uint8(2)
+	stateFlagPage2 = uint8(4)
+	stateFlagHiRes = uint8(8)
 )
 
 func (env *Environment) SaveState(w io.Writer) error {
@@ -51,9 +50,6 @@ func (env *Environment) SaveState(w io.Writer) error {
 	}
 	if env.mem.hiResMode {
 		flags |= stateFlagHiRes
-	}
-	if env.promptShown {
-		flags |= stateFlagPromptShown
 	}
 	if _, err := w.Write([]uint8{flags, env.col}); err != nil {
 		return err
@@ -84,7 +80,6 @@ func (env *Environment) LoadState(r io.Reader) error {
 	env.mem.mixedMode = flags&stateFlagMixed != 0
 	env.mem.page2 = flags&stateFlagPage2 != 0
 	env.mem.hiResMode = flags&stateFlagHiRes != 0
-	env.promptShown = flags&stateFlagPromptShown != 0
 	env.col = tail[1]
 	return nil
 }

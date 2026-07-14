@@ -21,7 +21,6 @@ type testConsole struct {
 }
 
 func (c *testConsole) ReadLine(prompt string) (string, bool) {
-	c.output += prompt
 	if c.lineIn >= len(c.linesIn) {
 		return "", true
 	}

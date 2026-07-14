@@ -41,7 +41,7 @@ func (c *consoleMock) nextLine() (string, bool) {
 }
 
 func (c *consoleMock) ReadLine(prompt string) (string, bool) {
-	c.Write(prompt)
+	// The prompt already arrived through Write, echo only the line
 	line, eof := c.nextLine()
 	if eof {
 		return "", true
