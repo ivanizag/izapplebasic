@@ -113,6 +113,38 @@ func TestMetaExportNoProgram(t *testing.T) {
 	}
 }
 
+func TestMetaShell(t *testing.T) {
+	out, _ := runConsole(t, []string{"/!echo hello from the host"})
+	assertContains(t, out, "hello from the host")
+}
+
+// The rest of the line keeps its case, its words and its quoting,
+// and goes through a shell so the pipes and the globs work
+func TestMetaShellIsNotParsed(t *testing.T) {
+	out, _ := runConsole(t, []string{`/!echo "Mixed Case" | tr a-z A-Z`})
+	assertContains(t, out, "MIXED CASE")
+}
+
+func TestMetaShellFailure(t *testing.T) {
+	out, _ := runConsole(t, []string{"/!exit 3"})
+	assertContains(t, out, "exit status 3")
+}
+
+func TestMetaShellEmpty(t *testing.T) {
+	out, _ := runConsole(t, []string{"/!"})
+	assertContains(t, out, "usage: /!<command>")
+}
+
+// A shell escape must not reach the emulated machine as BASIC
+func TestMetaShellDoesNotReachBasic(t *testing.T) {
+	out, _ := runConsole(t, []string{"/!echo ok", "PRINT 2+2"})
+	assertContains(t, out, "ok")
+	assertContains(t, out, "4")
+	if strings.Contains(out, "SYNTAX") {
+		t.Errorf("the shell escape must not reach Applesoft:\n%s", out)
+	}
+}
+
 func TestMetaScreenshot(t *testing.T) {
 	filename := filepath.Join(t.TempDir(), "test.png")
 	out, _ := runConsole(t, []string{

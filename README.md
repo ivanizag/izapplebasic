@@ -131,6 +131,10 @@ reach the emulated machine. On the command line:
   rendered as they would show on the real screen.
 - `/tape [name]` and `/rewind [block]`: manage the emulated cassette
   deck, see below.
+- `/!<command>`: run a command on the host and show its output, like
+  `/!ls` or `/!cat program.bas`. The rest of the line goes to a shell
+  as it is, so the pipes, the globs and the quoting work. Only on the
+  command line frontend, the telegram bot has no way to reach it.
 
 ## The cassette
 

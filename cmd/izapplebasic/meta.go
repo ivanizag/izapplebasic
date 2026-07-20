@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/png"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -25,6 +26,12 @@ func metaCommand(env *iz.Environment, con iz.Console, tape *tapeDrive, line stri
 	if !strings.HasPrefix(line, "/") {
 		return false
 	}
+	if shell, found := strings.CutPrefix(line, "/!"); found {
+		// Checked before splitting, the rest of the line is a
+		// command for the host with its own words and quoting
+		runShellCommand(con, strings.TrimSpace(shell))
+		return true
+	}
 	fields := strings.Fields(line)
 	command := strings.ToLower(fields[0])
 	arg := ""
@@ -43,6 +50,7 @@ func metaCommand(env *iz.Environment, con iz.Console, tape *tapeDrive, line stri
 		con.Write("  /load [filename]: load the emulation state\n")
 		con.Write("  /screenshot [filename.png]: save an image of the emulated screen\n")
 		con.Write("  /export [filename.bas]: save the program as text, Applesoft only\n")
+		con.Write("  /!<command>: run a command on the host, like /!ls\n")
 		con.Write("  /tape [name]: insert a cassette tape for SAVE and LOAD, or show it\n")
 		con.Write("  /rewind [block]: move the tape to a block, 0 by default\n")
 
@@ -109,6 +117,41 @@ func loadStateFile(env *iz.Environment, filename string) error {
 	}
 	defer f.Close()
 	return env.LoadState(f)
+}
+
+/*
+runShellCommand runs a command on the host and shows its output,
+the "/!ls" escape to the shell of the command line frontend.
+
+It is handed to a shell so the pipes, the globs and the quoting work
+as they would on the terminal. There is no input: the standard input
+of the process is the one being typed on, the emulated machine reads
+from it.
+
+This is only on the command line frontend, where the user already
+has a shell. The telegram bot has its own meta commands and none of
+them reaches this.
+*/
+func runShellCommand(con iz.Console, command string) {
+	if command == "" {
+		con.Write("usage: /!<command>, for example /!ls\n")
+		return
+	}
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+	output, err := exec.Command(shell, "-c", command).CombinedOutput()
+	if len(output) != 0 {
+		text := string(output)
+		if !strings.HasSuffix(text, "\n") {
+			text += "\n"
+		}
+		con.Write(text)
+	}
+	if err != nil {
+		con.Write(fmt.Sprintf("%s: %v\n", command, err))
+	}
 }
 
 // writeProgram saves the BASIC program as a text file and reports
