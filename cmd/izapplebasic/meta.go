@@ -19,6 +19,7 @@ emulation core has none.
 */
 
 const defaultStateFilename = "izapplebasic.state"
+const defaultProgramFilename = "program.bas"
 
 func metaCommand(env *iz.Environment, con iz.Console, tape *tapeDrive, line string) bool {
 	if !strings.HasPrefix(line, "/") {
@@ -41,6 +42,7 @@ func metaCommand(env *iz.Environment, con iz.Console, tape *tapeDrive, line stri
 		con.Write("  /save [filename]: save the emulation state\n")
 		con.Write("  /load [filename]: load the emulation state\n")
 		con.Write("  /screenshot [filename.png]: save an image of the emulated screen\n")
+		con.Write("  /export [filename.bas]: save the program as text, Applesoft only\n")
 		con.Write("  /tape [name]: insert a cassette tape for SAVE and LOAD, or show it\n")
 		con.Write("  /rewind [block]: move the tape to a block, 0 by default\n")
 
@@ -78,6 +80,13 @@ func metaCommand(env *iz.Environment, con iz.Console, tape *tapeDrive, line stri
 		}
 		writeImage(con, env.Snapshot(), filename, env.VideoModeName())
 
+	case "/export":
+		filename := defaultProgramFilename
+		if len(fields) > 1 {
+			filename = fields[1]
+		}
+		writeProgram(con, env, filename)
+
 	default:
 		con.Write(fmt.Sprintf("unknown meta command %s, try /help\n", command))
 	}
@@ -100,6 +109,26 @@ func loadStateFile(env *iz.Environment, filename string) error {
 	}
 	defer f.Close()
 	return env.LoadState(f)
+}
+
+// writeProgram saves the BASIC program as a text file and reports
+// the result.
+func writeProgram(con iz.Console, env *iz.Environment, filename string) {
+	program, err := env.ExportProgram()
+	if err != nil {
+		con.Write(fmt.Sprintf("error exporting the program: %v\n", err))
+		return
+	}
+	if program == "" {
+		con.Write("there is no program to export\n")
+		return
+	}
+	if err := os.WriteFile(filename, []byte(program), 0644); err != nil {
+		con.Write(fmt.Sprintf("error exporting the program: %v\n", err))
+		return
+	}
+	con.Write(fmt.Sprintf("%v lines exported to %s\n",
+		strings.Count(program, "\n"), filename))
 }
 
 // writeImage saves a snapshot as a PNG file and reports the result.

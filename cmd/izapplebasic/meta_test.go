@@ -85,6 +85,34 @@ func TestMetaSaveAndLoad(t *testing.T) {
 	assertContains(t, out, "42")
 }
 
+func TestMetaExport(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "test.bas")
+	out, _ := runConsole(t, []string{
+		`10 PRINT "A"`,
+		"20 A=1:PRINT A",
+		"/export " + filename,
+	})
+	assertContains(t, out, "2 lines exported to "+filename)
+
+	program, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "10  PRINT \"A\"\n20 A = 1: PRINT A\n"
+	if string(program) != want {
+		t.Errorf("unexpected file:\ngot:\n%s\nwant:\n%s", program, want)
+	}
+}
+
+func TestMetaExportNoProgram(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "empty.bas")
+	out, _ := runConsole(t, []string{"/export " + filename})
+	assertContains(t, out, "there is no program to export")
+	if _, err := os.Stat(filename); err == nil {
+		t.Error("no file must be written when there is no program")
+	}
+}
+
 func TestMetaScreenshot(t *testing.T) {
 	filename := filepath.Join(t.TempDir(), "test.png")
 	out, _ := runConsole(t, []string{

@@ -119,6 +119,11 @@ reach the emulated machine. On the command line:
   it back, even on another session. A state saved on one BASIC
   brings its ROM along on the load. The state can also be loaded on
   startup with the `-load` argument.
+- `/export [filename.bas]`: save the program in memory as a text
+  file, laid out as `LIST` prints it. The keywords come from the
+  token name table of the ROM itself, so a ROM given with `-rom`
+  brings its own. Applesoft only for now, the Integer BASIC program
+  format is not decoded yet.
 - `/screenshot [filename.png]`: save a PNG image of the emulated screen,
   rendered with the [izapple2](https://github.com/ivanizag/izapple2)
   screen module. The video mode softswitches (0xc050-0xc057) are

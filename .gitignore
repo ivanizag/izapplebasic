@@ -11,3 +11,5 @@ screenshot-*.png
 telegram-data/
 .env
 tape-*.tape
+*.bas
+*.BAS
