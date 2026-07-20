@@ -51,6 +51,29 @@ func TestApplesoftSaveLoad(t *testing.T) {
 	assertContains(t, con.output, "FROM THE TAPE")
 }
 
+// Integer BASIC has its own SAVE and LOAD, they also go through the
+// monitor tape routines
+func TestIntegerSaveLoad(t *testing.T) {
+	env, con := testEnvironmentWithLanguage(t, LanguageInteger, []string{
+		`10 PRINT "FROM THE TAPE"`,
+		"SAVE",
+		"NEW",
+		"LOAD",
+		"RUN",
+	})
+	// Rewind the tape before the LOAD
+	con.onReadLine = func(line string) {
+		if line == "LOAD" {
+			con.tapePos = 0
+		}
+	}
+	env.Run()
+	if len(con.tapeBlocks) == 0 {
+		t.Fatal("the SAVE must write to the tape")
+	}
+	assertContains(t, con.output, "FROM THE TAPE")
+}
+
 func TestTapeReadEndOfTape(t *testing.T) {
 	out := runBasic(t, []string{
 		"CALL -151",

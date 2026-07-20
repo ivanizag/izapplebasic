@@ -20,6 +20,18 @@ const (
 	addrCOUT1  = uint16(0xfdf0) // Output the char in A to the screen
 	addrWRITE  = uint16(0xfecd) // Write the range A1..A2 to the cassette
 	addrREAD   = uint16(0xfefd) // Read from the cassette into A1..A2
+
+	/*
+		MON, the monitor entry point reached at the end of the reset
+		code, once the screen and the I/O vectors are initialized and
+		before the bell and the "*" prompt. Used to enter a BASIC
+		that the reset vector does not reach on its own.
+
+		It is not a trap, no RTS is patched there: the run loop only
+		moves the PC away on the boot. CALL -151 enters the monitor
+		at MONZ (0xff69), further along, so it never collides.
+	*/
+	addrMON = uint16(0xff65)
 )
 
 // Monitor zero page usage
@@ -67,6 +79,19 @@ func (env *Environment) Run() {
 			by serving that GETLN.
 		*/
 		pc, _ := env.cpu.GetPCAndSP()
+		if env.pendingColdStart && pc == addrMON {
+			/*
+				The original monitor has finished the reset: the
+				screen and the I/O vectors are set up and nothing has
+				been printed yet, the bell and the "*" prompt come
+				next. Enter the BASIC instead. The PC is moved before
+				the instruction runs, the loop dispatches on the new
+				one.
+			*/
+			env.pendingColdStart = false
+			env.cpu.SetPC(env.language.info().coldStart)
+			continue
+		}
 		switch pc {
 		case addrCOUT1:
 			execCOUT1(env)
@@ -154,6 +179,59 @@ func (env *Environment) setColumn(col uint8) {
 	env.mem.Poke(zpCH, col)
 }
 
+/*
+readInput asks the frontend for a line and gives it the chance to
+process it as a meta command, taking more lines until one is for the
+machine.
+
+The second value reports that the wait this was serving no longer
+exists, the caller has to return without delivering anything: the
+input ended, a meta command stopped the machine, or one moved the
+CPU with a reset or a state load. The run loop then dispatches on
+whatever the new PC is.
+*/
+func (env *Environment) readInput(keys bool) (string, bool) {
+	/*
+		The prompt was printed by the caller through COUT: the "]"
+		of Applesoft, the ">" of Integer BASIC, the "*" of the
+		monitor, or the text of an INPUT. It is the current line of
+		the screen, reconstructed from the text page so it survives
+		a state save and load.
+	*/
+	prompt := env.currentLine()
+	entryPC, _ := env.cpu.GetPCAndSP()
+	for {
+		var line string
+		var eof bool
+		if keys {
+			line, eof = env.con.ReadKeys(prompt)
+		} else {
+			line, eof = env.con.ReadLine(prompt)
+		}
+		if eof {
+			env.stop = true
+			return "", true
+		}
+		if !env.con.MetaCommand(line) {
+			return line, false
+		}
+		if env.stop {
+			// A meta command stopped the machine
+			return "", true
+		}
+		if pc, _ := env.cpu.GetPCAndSP(); pc != entryPC {
+			return "", true
+		}
+	}
+}
+
+/*
+execKEYIN serves the keystroke reads. Integer BASIC reads its direct
+mode this way, one key at a time instead of calling GETLN, so the
+line is taken whole from the frontend and handed over key by key.
+The meta commands are processed on the line boundary, the only point
+where the machine is not in the middle of a line.
+*/
 func execKEYIN(env *Environment) {
 	env.log("KEYIN()")
 	_, x, y, p := env.cpu.GetAXYP()
@@ -163,11 +241,15 @@ func execKEYIN(env *Environment) {
 		env.cpu.SetAXYP(0x83, x, y, p)
 		return
 	}
-	ch, eof := env.con.ReadChar()
-	if eof {
-		env.stop = true
-		return
+	if len(env.pendingIn) == 0 {
+		line, abandoned := env.readInput(true)
+		if abandoned {
+			return
+		}
+		env.pendingIn = append([]uint8(line), '\r')
 	}
+	ch := env.pendingIn[0]
+	env.pendingIn = env.pendingIn[1:]
 	if env.Uppercase && ch >= 'a' && ch <= 'z' {
 		ch -= 'a' - 'A'
 	}
@@ -175,37 +257,9 @@ func execKEYIN(env *Environment) {
 }
 
 func execGETLN(env *Environment) {
-	/*
-		The prompt was printed by the caller through COUT: the "]"
-		of Applesoft, the "*" of the monitor, or the text of an
-		INPUT. It is the current line of the screen, reconstructed
-		from the text page so it survives a state save and load.
-	*/
-	prompt := env.currentLine()
-	entryPC, _ := env.cpu.GetPCAndSP()
-	var line string
-	for {
-		var eof bool
-		line, eof = env.con.ReadLine(prompt)
-		if eof {
-			env.stop = true
-			return
-		}
-		if !env.con.MetaCommand(line) {
-			break
-		}
-		if env.stop {
-			// A meta command stopped the machine
-			return
-		}
-		if pc, _ := env.cpu.GetPCAndSP(); pc != entryPC {
-			/*
-				A meta command like a reset or a state load moved the
-				CPU: this GETLN wait no longer exists. Return without
-				serving input, the run loop dispatches on the new PC.
-			*/
-			return
-		}
+	line, abandoned := env.readInput(false)
+	if abandoned {
+		return
 	}
 	// A control-C pressed while typing would have been consumed as
 	// input by the real GETLN, it must not break the next RUN

@@ -19,7 +19,6 @@ type consoleLiner struct {
 	tape        *tapeDrive
 	esc         *escaper
 	liner       *liner.State
-	pendingIn   []uint8 // chars buffered for ReadChar()
 	clearScreen bool
 }
 
@@ -39,11 +38,35 @@ func newConsoleLiner(env *iz.Environment, tape *tapeDrive, esc *escaper, clearSc
 }
 
 func (c *consoleLiner) ReadLine(prompt string) (string, bool) {
-	/*
-		The prompt is the text already printed on the current line,
-		like the "]" of Applesoft or the text of an INPUT: liner
-		redraws it to be able to edit the line.
-	*/
+	line, _ := c.prompt(prompt)
+	return line, false
+}
+
+/*
+ReadKeys reads the line the same way, but the machine is going to
+print the keys as it reads them, over the line liner already left on
+the terminal. Erase that line and put the prompt back on it: the
+echo of the machine then completes it, instead of showing it twice.
+*/
+func (c *consoleLiner) ReadKeys(prompt string) (string, bool) {
+	line, typed := c.prompt(prompt)
+	if typed {
+		// Up to the line liner left, clear it, prompt again
+		fmt.Printf("\033[A\r\033[K%s", prompt)
+	}
+	return line, false
+}
+
+/*
+prompt reads a line with the editor. The second value is false when
+nothing was entered and liner left no line on the terminal: a
+control-C escape or a control-D.
+
+The prompt is the text already printed on the current line, like the
+"]" of Applesoft or the text of an INPUT: liner redraws it to be
+able to edit the line.
+*/
+func (c *consoleLiner) prompt(prompt string) (string, bool) {
 	fmt.Print("\r")
 	line, err := c.liner.Prompt(prompt)
 	if errors.Is(err, liner.ErrInvalidPrompt) {
@@ -69,20 +92,7 @@ func (c *consoleLiner) ReadLine(prompt string) (string, bool) {
 	if line != "" {
 		c.liner.AppendHistory(line)
 	}
-	return line, false
-}
-
-func (c *consoleLiner) ReadChar() (uint8, bool) {
-	for len(c.pendingIn) == 0 {
-		line, eof := c.ReadLine("")
-		if eof {
-			return 0, true
-		}
-		c.pendingIn = append([]uint8(line), '\r')
-	}
-	ch := c.pendingIn[0]
-	c.pendingIn = c.pendingIn[1:]
-	return ch, false
+	return line, true
 }
 
 func (c *consoleLiner) Write(s string) {

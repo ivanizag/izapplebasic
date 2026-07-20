@@ -181,6 +181,39 @@ func TestTelegramReset(t *testing.T) {
 	assertContains(t, out, "0")
 }
 
+// The machine is rebuilt on every message, the chosen BASIC has to
+// survive on the saved state
+func TestTelegramResetToInteger(t *testing.T) {
+	tf := newTelegramFrontend(t.TempDir())
+	tf.cycleBudget = 4_000_000
+
+	out, _ := telegramMessage(t, tf, "/reset integer")
+	assertContains(t, out, "reset to Integer BASIC")
+
+	out, _ = telegramMessage(t, tf, "PRINT 2+2")
+	assertContains(t, out, ">PRINT 2+2")
+	assertContains(t, out, "4")
+
+	// A reset with no argument stays on the BASIC in use
+	telegramMessage(t, tf, "/reset")
+	out, _ = telegramMessage(t, tf, "PRINT 3+3")
+	assertContains(t, out, ">PRINT 3+3")
+
+	// And back to Applesoft
+	out, _ = telegramMessage(t, tf, "/reset applesoft")
+	assertContains(t, out, "reset to Applesoft BASIC")
+	out, _ = telegramMessage(t, tf, "PRINT 4+4")
+	assertContains(t, out, "]PRINT 4+4")
+}
+
+func TestTelegramResetUnknownLanguage(t *testing.T) {
+	tf := newTelegramFrontend(t.TempDir())
+	tf.cycleBudget = 4_000_000
+
+	out, _ := telegramMessage(t, tf, "/reset pascal")
+	assertContains(t, out, "unknown BASIC")
+}
+
 func TestTelegramSavedStates(t *testing.T) {
 	tf := newTelegramFrontend(t.TempDir())
 	tf.cycleBudget = 4_000_000

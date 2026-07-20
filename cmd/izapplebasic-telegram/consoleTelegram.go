@@ -22,13 +22,12 @@ loop stops with the machine waiting on GETLN or KEYIN, the state is
 saved there and the next message continues the session.
 */
 type consoleTelegram struct {
-	env       *iz.Environment
-	dir       string // the folder of the user, for the saved states
-	linesIn   []string
-	lineIn    int
-	pendingIn []uint8 // chars buffered for ReadChar()
-	segments  []outSegment
-	images    []image.Image
+	env      *iz.Environment
+	dir      string // the folder of the user, for the saved states
+	linesIn  []string
+	lineIn   int
+	segments []outSegment
+	images   []image.Image
 
 	// The cassette deck, persisted in the folder of the user
 	// between messages
@@ -67,6 +66,16 @@ func (c *consoleTelegram) promptPending(prompt string) bool {
 }
 
 func (c *consoleTelegram) ReadLine(prompt string) (string, bool) {
+	return c.readLine(prompt, true)
+}
+
+// ReadKeys takes the line without echoing it: the machine prints the
+// keys itself as it reads them, echoing here would show it twice.
+func (c *consoleTelegram) ReadKeys(prompt string) (string, bool) {
+	return c.readLine(prompt, false)
+}
+
+func (c *consoleTelegram) readLine(prompt string, echo bool) (string, bool) {
 	if c.lineIn >= len(c.linesIn) {
 		/*
 			The machine is left waiting for input. Close the reply
@@ -87,31 +96,23 @@ func (c *consoleTelegram) ReadLine(prompt string) (string, bool) {
 		machine will see it: the reply reads as the transcript a
 		real terminal would show. The meta command lines are not
 		echoed, they never reach the machine.
+
+		On the keys path only the prompt is written: the machine
+		prints the line itself as it reads it, key by key.
 	*/
 	if !strings.HasPrefix(line, "/") {
-		shown := line
-		if c.env.Uppercase {
-			shown = strings.ToUpper(shown)
-		}
 		if c.promptPending(prompt) {
 			c.Write(prompt)
 		}
-		c.Write(shown + "\n")
+		if echo {
+			shown := line
+			if c.env.Uppercase {
+				shown = strings.ToUpper(shown)
+			}
+			c.Write(shown + "\n")
+		}
 	}
 	return line, false
-}
-
-func (c *consoleTelegram) ReadChar() (uint8, bool) {
-	for len(c.pendingIn) == 0 {
-		line, eof := c.ReadLine("")
-		if eof {
-			return 0, true
-		}
-		c.pendingIn = append([]uint8(line), '\r')
-	}
-	ch := c.pendingIn[0]
-	c.pendingIn = c.pendingIn[1:]
-	return ch, false
 }
 
 // Write collects output of the emulated machine, shown monospaced.
@@ -153,7 +154,7 @@ var telegramCommands = []struct {
 }{
 	{"help", "list the commands"},
 	{"screenshot", "show an image of the emulated screen"},
-	{"reset", "reboot the machine, losing everything not saved"},
+	{"reset", "reboot the machine, losing everything not saved: /reset [applesoft|integer]"},
 	{"save", "save the state: /save [name]"},
 	{"load", "load a saved state: /load [name]"},
 	{"list", "list the saved states and tapes"},
@@ -183,7 +184,8 @@ func (c *consoleTelegram) MetaCommand(line string) bool {
 
 	switch command {
 	case "help", "start": // /start is the telegram convention
-		c.notice("This is an Apple II+ running Applesoft BASIC, type commands as on the real machine.\n")
+		c.notice(fmt.Sprintf("This is an Apple II running %s, type commands as on the real machine.\n",
+			c.env.Language().Name()))
 		c.notice("Meta commands:\n")
 		for _, cmd := range telegramCommands {
 			c.notice(fmt.Sprintf("  /%s: %s\n", cmd.command, cmd.description))
@@ -193,8 +195,7 @@ func (c *consoleTelegram) MetaCommand(line string) bool {
 		c.images = append(c.images, c.env.Snapshot())
 
 	case "reset":
-		c.env.Reset()
-		c.notice("the machine has been reset\n")
+		c.metaReset(arg)
 
 	case "save":
 		c.metaSave(arg)
@@ -221,6 +222,26 @@ func (c *consoleTelegram) MetaCommand(line string) bool {
 		c.notice("unknown command /" + command + ", try /help\n")
 	}
 	return true
+}
+
+// metaReset reboots the machine. Without an argument it stays on
+// the BASIC in use, the name of a BASIC switches the ROM.
+func (c *consoleTelegram) metaReset(arg string) {
+	if arg == "" {
+		c.env.Reset()
+		c.notice("the machine has been reset\n")
+		return
+	}
+	language, ok := iz.ParseLanguage(arg)
+	if !ok {
+		c.notice("unknown BASIC, use /reset applesoft or /reset integer\n")
+		return
+	}
+	if err := c.env.ResetWithLanguage(language); err != nil {
+		c.notice("the machine could not be reset: " + err.Error() + "\n")
+		return
+	}
+	c.notice("the machine has been reset to " + language.Name() + "\n")
 }
 
 var validStateName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,30}$`)

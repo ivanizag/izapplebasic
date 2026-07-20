@@ -1,9 +1,10 @@
 # izapplebasic
 
-Applesoft BASIC on modern hardware. It runs the unmodified Apple II+
-ROM on the [iz6502](https://github.com/ivanizag/iz6502) emulated CPU
-and intercepts the monitor calls to use the modern computer
-interfaces, in the spirit of [bbz](https://github.com/ivanizag/bbz).
+Applesoft and Integer BASIC on modern hardware. It runs the
+unmodified Apple II ROMs on the
+[iz6502](https://github.com/ivanizag/iz6502) emulated CPU and
+intercepts the monitor calls to use the modern computer interfaces,
+in the spirit of [bbz](https://github.com/ivanizag/bbz).
 
 The project is a Go library with the emulation core, package
 `izapplebasic` at the root, and two frontends in `cmd`: the command
@@ -20,9 +21,6 @@ go install github.com/ivanizag/izapplebasic/cmd/...@latest
 izapplebasic
 ```
 
-The Apple II+ ROM is embedded in the binary. Another ROM image
-(12 KB, 0xd000 to 0xffff) can be used with the `-rom` argument.
-
 ```
 ]10 FOR I=1 TO 5
 ]20 PRINT I, I*I
@@ -35,9 +33,34 @@ The Apple II+ ROM is embedded in the binary. Another ROM image
 5               25
 ```
 
+Both ROMs are embedded in the binary, Applesoft is the default and
+`-language integer` boots the other one:
+
+```
+izapplebasic -language integer
+```
+
+```
+>10 FOR I=1 TO 5
+>20 PRINT I, I*I
+>30 NEXT I
+>RUN
+1  1
+2  4
+3  9
+4  16
+5  25
+```
+
+Another ROM image can be used with the `-rom` argument, 12 KB from
+0xd000 or 8 KB from 0xe000. It is booted through the reset vector,
+as the Apple II+ one.
+
 Options:
 
-- `-rom <file>`: filename of the Apple II+ ROM (default: embedded)
+- `-language <name>`: BASIC to boot, `applesoft` or `integer`
+  (default: `applesoft`)
+- `-rom <file>`: filename of another ROM (default: embedded)
 - `-home`: clear the host screen on HOME (default: HOME is ignored)
 - `-c`: trace the CPU execution
 - `-m`: trace the intercepted monitor calls excluding char output
@@ -51,18 +74,26 @@ Options:
 
 ## How it works
 
-The emulated machine is an Apple II+ with 48 KB of RAM and nothing in
-the slots. On reset, the autostart monitor finds no bootable card and
-falls back to Applesoft BASIC.
+The emulated machine is an Apple II with 48 KB of RAM and nothing in
+the slots. With the Apple II+ ROM, on reset the autostart monitor
+finds no bootable card and falls back to Applesoft BASIC. The Apple
+II ROM has the original monitor, which has no autostart and stops on
+the `*` prompt: the run loop takes over at `MON` (0xff65), where the
+reset code has set up the screen and the I/O vectors but has not
+printed anything yet, and enters Integer BASIC on its cold start
+(0xe000).
 
-The monitor entry points for console I/O are patched with an RTS and
-intercepted when the program counter reaches them:
+Both ROMs share the same monitor entry points for console I/O, they
+are patched with an RTS and intercepted when the program counter
+reaches them:
 
 - `COUT1` (0xfdf0): char output
-- `KEYIN` (0xfd1b): char input, used by `GET`
-- `GETLN1` (0xfd6f): line input, used by the direct mode prompt and
-  `INPUT`. The prompt printing entry points GETLNZ and GETLN are
-  real ROM code running on the intercepted COUT.
+- `KEYIN` (0xfd1b): char input, used by Applesoft `GET` and by the
+  Integer BASIC direct mode, which reads its prompt key by key
+  instead of calling GETLN
+- `GETLN1` (0xfd6f): line input, used by the Applesoft direct mode
+  prompt and by `INPUT`. The prompt printing entry points GETLNZ and
+  GETLN are real ROM code running on the intercepted COUT.
 - `HOME` (0xfc58): clear the screen, on the command line ignored
   unless `-home` is given
 - `WRITE` and `READ` (0xfecd, 0xfefd): the cassette tape
@@ -84,9 +115,10 @@ reach the emulated machine. On the command line:
 - `/help`: list the meta commands
 - `/quit`: exit
 - `/save [filename]` and `/load [filename]`: save the emulation
-  state, CPU, RAM and video mode, and load it back, even on another
-  session. The state can also be loaded on startup with the `-load`
-  argument.
+  state, CPU, RAM, video mode and which BASIC was running, and load
+  it back, even on another session. A state saved on one BASIC
+  brings its ROM along on the load. The state can also be loaded on
+  startup with the `-load` argument.
 - `/screenshot [filename.png]`: save a PNG image of the emulated screen,
   rendered with the [izapple2](https://github.com/ivanizag/izapple2)
   screen module. The video mode softswitches (0xc050-0xc057) are
@@ -103,8 +135,9 @@ work. Each monitor call is one checksummed record on a real tape,
 here one block stored as the file `tape-NAME-nn.tape` with the raw
 bytes. Reads and writes happen at the current tape position and
 advance it, `/tape name` inserts another tape rewound to block 0 and
-`/rewind [block]` moves the position. An Applesoft `SAVE` writes two
-blocks, the length header and the program:
+`/rewind [block]` moves the position. Integer BASIC `SAVE` and
+`LOAD` go through the same monitor routines. An Applesoft `SAVE`
+writes two blocks, the length header and the program:
 
 ```
 ]/tape adventure
@@ -145,9 +178,10 @@ argument or in the `TELEGRAM_TOKEN` environment variable. The bot
 connects to Telegram with long polling, no webhook or open port is
 needed.
 
-Every user gets a persistent Apple II: on each message the state is
-loaded from a file, the lines of the message are executed and the
-state is saved back. Multiline messages work, a whole program can be
+Every user gets a persistent Apple II, running Applesoft until
+`/reset integer` switches it: on each message the state is loaded
+from a file, the lines of the message are executed and the state is
+saved back. Multiline messages work, a whole program can be
 pasted at once. A program waiting on `INPUT` or `GET` takes the next
 message as the answer. Programs running longer than the per message
 budget are stopped with the control-C break.
@@ -160,7 +194,10 @@ are suggested when typing `/`:
 
 - `/help`: list the commands
 - `/screenshot`: show an image of the emulated screen
-- `/reset`: reboot the machine, losing everything not saved
+- `/reset [applesoft|integer]`: reboot the machine, losing
+  everything not saved. Without an argument it stays on the BASIC in
+  use, with one it switches: `/reset integer` reboots into Integer
+  BASIC. The choice persists between messages.
 - `/save [name]`, `/load [name]`, `/list` and `/delete [name]`:
   manage named states, stored on the folder of the user, up to 30
   per user
@@ -180,8 +217,9 @@ the token in a `.env` file (`TELEGRAM_TOKEN=...`), create the
 
 ## Limitations
 
-- Line based input: `GET` waits for the enter key and takes the
-  characters of the line one by one.
+- Line based input: the keystroke reads take a whole line and serve
+  it key by key, so Applesoft `GET` waits for the enter key. The
+  meta commands are processed on the line boundary.
 - The graphics are only visible through `/screenshot`, there is no
   live graphics display. No disk.
 - Control-C breaks the running BASIC program as on a real Apple II,

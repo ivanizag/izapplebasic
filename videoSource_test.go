@@ -9,7 +9,7 @@ import (
 )
 
 func TestVideoModeTracking(t *testing.T) {
-	m, _ := newAppleMemory(embeddedROM, embeddedCharGen)
+	m, _ := newAppleMemory(applesoftROM, embeddedCharGen)
 	if m.GetCurrentVideoMode() != screen.VideoText40 {
 		t.Error("the initial mode must be text")
 	}
@@ -41,7 +41,7 @@ func TestVideoModeTracking(t *testing.T) {
 }
 
 func TestVideoMemory(t *testing.T) {
-	m, _ := newAppleMemory(embeddedROM, embeddedCharGen)
+	m, _ := newAppleMemory(applesoftROM, embeddedCharGen)
 	m.Poke(0x0400, 0xc1)
 	if m.GetTextMemory(false, false)[0] != 0xc1 {
 		t.Error("text page 1 expected")

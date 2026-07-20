@@ -30,10 +30,10 @@ func (c *testConsole) ReadLine(prompt string) (string, bool) {
 	return line, false
 }
 
-func (c *testConsole) ReadChar() (uint8, bool) { return 0, true }
-func (c *testConsole) Write(s string)          { c.output += s }
-func (c *testConsole) Clear()                  {}
-func (c *testConsole) close()                  {}
+func (c *testConsole) ReadKeys(prompt string) (string, bool) { return c.ReadLine(prompt) }
+func (c *testConsole) Write(s string)                        { c.output += s }
+func (c *testConsole) Clear()                                {}
+func (c *testConsole) close()                                {}
 
 func (c *testConsole) MetaCommand(line string) bool {
 	return metaCommand(c.env, c, c.tape, line)

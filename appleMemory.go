@@ -15,12 +15,17 @@ Memory map of an Apple II+ without any card in the slots:
 
 Reading zeros in the slot ROM area makes the autostart monitor slot
 scan fail to find a bootable card, falling back to BASIC.
+
+The Integer BASIC ROM is 8 KB and covers only 0xe000-0xffff, the
+0xd000-0xdfff socket of the Programmer's Aid is left reading zeros.
 */
 const (
 	ioAreaStart   = uint16(0xc000)
 	slotAreaStart = uint16(0xc100)
 	romAreaStart  = uint16(0xd000)
 	romSize       = 0x3000
+	romAreaStart8 = uint16(0xe000)
+	romSize8      = 0x2000
 	charGenSize   = 0x800
 
 	ioKeyboard = uint16(0xc000)
@@ -63,16 +68,34 @@ type appleMemory struct {
 
 func newAppleMemory(rom []uint8, charGen []uint8) (*appleMemory, error) {
 	var m appleMemory
-	if len(rom) != romSize {
-		return nil, fmt.Errorf("the ROM must be %v bytes long, it is %v bytes", romSize, len(rom))
-	}
 	if len(charGen) != charGenSize {
 		return nil, fmt.Errorf("the character generator ROM must be %v bytes long, it is %v bytes", charGenSize, len(charGen))
 	}
-	copy(m.data[romAreaStart:], rom)
+	if err := m.loadROM(rom); err != nil {
+		return nil, err
+	}
 	m.charGen = charGen
 	m.textMode = true
 	return &m, nil
+}
+
+// loadROM places a 12 KB ROM on 0xd000 or an 8 KB one on 0xe000,
+// clearing the whole ROM area first so no leftovers of a previous
+// ROM are left when swapping to a smaller one.
+func (m *appleMemory) loadROM(rom []uint8) error {
+	if len(rom) != romSize && len(rom) != romSize8 {
+		return fmt.Errorf("the ROM must be %v or %v bytes long, it is %v bytes",
+			romSize, romSize8, len(rom))
+	}
+	for i := range m.data[romAreaStart:] {
+		m.data[int(romAreaStart)+i] = 0
+	}
+	if len(rom) == romSize {
+		copy(m.data[romAreaStart:], rom)
+	} else {
+		copy(m.data[romAreaStart8:], rom)
+	}
+	return nil
 }
 
 // ioSwitch processes the side effects of an access, read or write,

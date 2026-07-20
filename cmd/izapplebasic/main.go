@@ -9,10 +9,14 @@ import (
 )
 
 func main() {
+	languageName := flag.String(
+		"language",
+		"applesoft",
+		"BASIC to boot: applesoft or integer")
 	romFilename := flag.String(
 		"rom",
 		"",
-		"filename of the Apple II+ ROM, 12 KB from 0xd000 to 0xffff (default: embedded ROM)")
+		"filename of an Apple II+ ROM, 12 KB from 0xd000 or 8 KB from 0xe000 (default: embedded ROM)")
 	traceCPU := flag.Bool(
 		"c",
 		false,
@@ -57,17 +61,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	var rom []uint8
+	language, ok := iz.ParseLanguage(*languageName)
+	if !ok {
+		fmt.Fprintln(os.Stderr, "Error: unknown language, use applesoft or integer")
+		os.Exit(1)
+	}
+
+	var env *iz.Environment
+	var err error
 	if *romFilename != "" {
-		var err error
+		// A ROM given as a file is booted through the reset vector,
+		// as the Apple II+ one
+		var rom []uint8
 		rom, err = os.ReadFile(*romFilename)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+		env, err = iz.NewEnvironment(rom)
+	} else {
+		env, err = iz.NewEnvironmentWithLanguage(language)
 	}
-
-	env, err := iz.NewEnvironment(rom)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -102,7 +116,8 @@ func main() {
 
 	handleControlC(esc)
 
-	fmt.Println("izapplebasic - Applesoft BASIC on modern hardware, https://github.com/ivanizag/izapplebasic")
+	fmt.Printf("izapplebasic - %s on modern hardware, https://github.com/ivanizag/izapplebasic\n",
+		env.Language().Name())
 	fmt.Println("(type /help for the meta commands, press control-c twice to exit)")
 
 	env.Run()

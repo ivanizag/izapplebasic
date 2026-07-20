@@ -8,12 +8,17 @@ import (
 // testCyclesLimit stops a test if a BASIC program loops forever.
 const testCyclesLimit = 200_000_000
 
-// testEnvironment builds an environment ready to run with a mock
-// console fed with the given input lines.
+// testEnvironment builds an Applesoft environment ready to run with
+// a mock console fed with the given input lines.
 func testEnvironment(t *testing.T, linesIn []string) (*Environment, *consoleMock) {
 	t.Helper()
+	return testEnvironmentWithLanguage(t, LanguageApplesoft, linesIn)
+}
+
+func testEnvironmentWithLanguage(t *testing.T, language Language, linesIn []string) (*Environment, *consoleMock) {
+	t.Helper()
 	con := newConsoleMock(linesIn)
-	env, err := NewEnvironment(nil)
+	env, err := NewEnvironmentWithLanguage(language)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +31,18 @@ func testEnvironment(t *testing.T, linesIn []string) (*Environment, *consoleMock
 // prompt and returns the session transcript.
 func runBasic(t *testing.T, linesIn []string) string {
 	t.Helper()
-	env, con := testEnvironment(t, linesIn)
+	return runLanguage(t, LanguageApplesoft, linesIn)
+}
+
+// runInteger is the same on the Integer BASIC prompt.
+func runInteger(t *testing.T, linesIn []string) string {
+	t.Helper()
+	return runLanguage(t, LanguageInteger, linesIn)
+}
+
+func runLanguage(t *testing.T, language Language, linesIn []string) string {
+	t.Helper()
+	env, con := testEnvironmentWithLanguage(t, language, linesIn)
 	env.Run()
 	if env.Cycles() >= testCyclesLimit {
 		t.Log(con.output)

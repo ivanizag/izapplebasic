@@ -15,7 +15,6 @@ type consoleStdio struct {
 	env         *iz.Environment
 	tape        *tapeDrive
 	in          *bufio.Reader
-	pending     []uint8 // chars buffered for ReadChar()
 	clearScreen bool
 }
 
@@ -38,17 +37,10 @@ func (c *consoleStdio) ReadLine(prompt string) (string, bool) {
 	return line, false
 }
 
-func (c *consoleStdio) ReadChar() (uint8, bool) {
-	for len(c.pending) == 0 {
-		line, eof := c.ReadLine("")
-		if eof {
-			return 0, true
-		}
-		c.pending = append([]uint8(line), '\r')
-	}
-	ch := c.pending[0]
-	c.pending = c.pending[1:]
-	return ch, false
+// ReadKeys is the same read: this console never echoes the input,
+// the prompt and the typed text are already on the terminal.
+func (c *consoleStdio) ReadKeys(prompt string) (string, bool) {
+	return c.ReadLine(prompt)
 }
 
 func (c *consoleStdio) Write(s string) {

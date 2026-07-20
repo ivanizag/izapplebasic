@@ -6,13 +6,25 @@ import (
 	"github.com/ivanizag/iz6502"
 )
 
-// Environment is an Apple II+ running Applesoft BASIC with the
-// console I/O intercepted.
+// Environment is an Apple II running Applesoft or Integer BASIC
+// with the console I/O intercepted.
 type Environment struct {
 	cpu *iz6502.State
 	mem *appleMemory
 	con Console
 	col uint8 // column position on the host output
+
+	// language is the BASIC in ROM. It travels with the state: a
+	// state saved on one BASIC restores its ROM on load.
+	language Language
+
+	// pendingColdStart makes the run loop enter the BASIC once the
+	// monitor reset code has initialized the machine. See boot.
+	pendingColdStart bool
+
+	// pendingIn holds the rest of an input line taken from the
+	// frontend, to be served key by key. See execKEYIN.
+	pendingIn []uint8
 
 	stop bool
 
@@ -35,23 +47,64 @@ type Environment struct {
 }
 
 // NewEnvironment builds the machine with the given ROM, or the
-// embedded Apple II+ ROM when nil. The console has to be set with
-// SetConsole before calling Run.
+// embedded Apple II+ ROM when nil. A ROM given here is booted as
+// the Apple II+ one, through the reset vector. The console has to
+// be set with SetConsole before calling Run.
 func NewEnvironment(rom []uint8) (*Environment, error) {
 	if rom == nil {
-		rom = embeddedROM
+		return NewEnvironmentWithLanguage(LanguageApplesoft)
 	}
+	return newEnvironment(rom, LanguageApplesoft)
+}
+
+// NewEnvironmentWithLanguage builds the machine with the embedded
+// ROM of the given BASIC.
+func NewEnvironmentWithLanguage(language Language) (*Environment, error) {
+	return newEnvironment(language.info().data, language)
+}
+
+func newEnvironment(rom []uint8, language Language) (*Environment, error) {
 	var env Environment
 	mem, err := newAppleMemory(rom, embeddedCharGen)
 	if err != nil {
 		return nil, err
 	}
 	env.mem = mem
+	env.language = language
 	env.Uppercase = true
 	env.cpu = iz6502.NewNMOS6502(mem)
 	patchMonitorTraps(mem)
-	env.cpu.Reset()
+	env.boot()
 	return &env, nil
+}
+
+/*
+boot restarts the CPU on the reset vector. On the Apple II+ that is
+the autostart monitor, which lands on Applesoft by itself. On the
+Apple II it is the original monitor, which initializes the screen
+and the I/O vectors and then stops on the "*" prompt: the run loop
+takes over there and enters Integer BASIC on its cold start.
+*/
+func (env *Environment) boot() {
+	env.cpu.Reset()
+	env.pendingColdStart = env.language.info().coldStart != 0
+}
+
+// Language returns the BASIC in ROM.
+func (env *Environment) Language() Language {
+	return env.language
+}
+
+// setLanguage swaps the ROM in place, keeping the RAM and the CPU
+// untouched. The traps have to be patched again, the ROM bytes
+// holding them were just overwritten.
+func (env *Environment) setLanguage(language Language) error {
+	if err := env.mem.loadROM(language.info().data); err != nil {
+		return err
+	}
+	patchMonitorTraps(env.mem)
+	env.language = language
+	return nil
 }
 
 // SetConsole attaches the frontend.
@@ -71,7 +124,8 @@ func (env *Environment) Break() {
 }
 
 // Reset takes the machine back to a cold boot: the RAM is cleared
-// and the CPU restarts on the reset vector.
+// and the CPU restarts on the reset vector. The BASIC in ROM is
+// kept, use ResetWithLanguage to change it.
 func (env *Environment) Reset() {
 	for i := range env.mem.data[:ioAreaStart] {
 		env.mem.data[i] = 0
@@ -81,8 +135,20 @@ func (env *Environment) Reset() {
 	env.mem.page2 = false
 	env.mem.hiResMode = false
 	env.mem.breakPending.Store(false)
-	env.cpu.Reset()
+	env.boot()
 	env.col = 0
+	// The keys not yet read belong to the machine that is gone
+	env.pendingIn = nil
+}
+
+// ResetWithLanguage swaps the ROM for the one of the given BASIC
+// and does a cold boot on it.
+func (env *Environment) ResetWithLanguage(language Language) error {
+	if err := env.setLanguage(language); err != nil {
+		return err
+	}
+	env.Reset()
+	return nil
 }
 
 // Cycles returns the CPU cycles executed so far.

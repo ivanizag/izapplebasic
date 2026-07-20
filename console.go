@@ -7,11 +7,19 @@ package izapplebasic
 type Console interface {
 	// ReadLine returns a full line of input, without the final CR.
 	// The second value is true when there is no more input (EOF).
+	// The line is echoed by the frontend: it is read by a ROM call
+	// that does not print what it reads.
 	ReadLine(prompt string) (string, bool)
 
-	// ReadChar returns a single character of input.
-	// The second value is true when there is no more input (EOF).
-	ReadChar() (uint8, bool)
+	/*
+		ReadKeys returns a line of input to be delivered to the
+		machine one keystroke at a time, as Integer BASIC reads its
+		direct mode and Applesoft reads a GET.
+
+		Same as ReadLine, except that the frontend must not echo the
+		line: the machine prints the keys itself as it reads them.
+	*/
+	ReadKeys(prompt string) (string, bool)
 
 	// Write sends text to the user.
 	Write(string)

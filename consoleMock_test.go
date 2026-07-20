@@ -8,7 +8,6 @@ import "strings"
 type consoleMock struct {
 	linesIn []string
 	lineIn  int
-	pending []uint8 // chars buffered for ReadChar()
 	output  string
 
 	// onReadLine, if set, is called before each line is returned,
@@ -50,17 +49,9 @@ func (c *consoleMock) ReadLine(prompt string) (string, bool) {
 	return line, false
 }
 
-func (c *consoleMock) ReadChar() (uint8, bool) {
-	for len(c.pending) == 0 {
-		line, eof := c.nextLine()
-		if eof {
-			return 0, true
-		}
-		c.pending = append([]uint8(line), '\r')
-	}
-	ch := c.pending[0]
-	c.pending = c.pending[1:]
-	return ch, false
+// ReadKeys does not echo, the machine prints the keys it reads
+func (c *consoleMock) ReadKeys(prompt string) (string, bool) {
+	return c.nextLine()
 }
 
 func (c *consoleMock) Write(s string) {
