@@ -110,10 +110,14 @@ session as a real Apple II would.
 ## Meta commands
 
 Lines starting with `/` are processed by the frontend, they never
-reach the emulated machine. On the command line:
+reach the emulated machine. On the command line, press tab after the
+`/` to see them all:
 
 - `/help`: list the meta commands
 - `/quit`: exit
+- `/reset [applesoft|integer]`: reboot the machine, losing everything
+  not saved. Without an argument it stays on the BASIC in use, with
+  one it switches: `/reset integer` reboots into Integer BASIC.
 - `/save [filename]` and `/load [filename]`: save the emulation
   state, CPU, RAM, video mode and which BASIC was running, and load
   it back, even on another session. A state saved on one BASIC
@@ -129,8 +133,8 @@ reach the emulated machine. On the command line:
   screen module. The video mode softswitches (0xc050-0xc057) are
   tracked, so `GR` and `HGR` graphics, mixed modes and page 2 are
   rendered as they would show on the real screen.
-- `/tape [name]` and `/rewind [block]`: manage the emulated cassette
-  deck, see below.
+- `/tape [name]`, `/tapes [folder]` and `/rewind [block]`: manage the
+  emulated cassette deck, see below.
 - `/!<command>`: run a command on the host and show its output, like
   `/!ls` or `/!cat program.bas`. The rest of the line goes to a shell
   as it is, so the pipes, the globs and the quoting work. Only on the
@@ -144,7 +148,17 @@ work. Each monitor call is one checksummed record on a real tape,
 here one block stored as the file `tape-NAME-nn.tape` with the raw
 bytes. Reads and writes happen at the current tape position and
 advance it, `/tape name` inserts another tape rewound to block 0 and
-`/rewind [block]` moves the position. Integer BASIC `SAVE` and
+`/rewind [block]` moves the position. `/tapes` lists the tapes
+recorded on the current folder, or on the one given, with the number
+of blocks of each:
+
+```
+]/tapes
+tapes in .:
+  adventure (2 blocks)
+  default (4 blocks, inserted)
+```
+ Integer BASIC `SAVE` and
 `LOAD` go through the same monitor routines. An Applesoft `SAVE`
 writes two blocks, the length header and the program:
 
@@ -168,8 +182,14 @@ monitor `ERR`, as a bad tape would.
 ## Frontends
 
 - Command line: readline like input with history recall on the up
-  and down arrows, saved in `.izapplebasichistory`. Falls back to
-  plain stdin/stdout when the input is piped or with `-r`.
+  and down arrows, saved in `.izapplebasichistory`. Tab completes the
+  meta commands and their arguments: on a `/` it lists the commands,
+  after the space it offers the BASICs of `/reset`, the tapes of the
+  drive for `/tape` and the files or folders of the host for the
+  rest. On a prefix it completes as far as it is unambiguous and a
+  second tab shows the candidates. Falls back to plain stdin/stdout
+  when the input is piped or with `-r`, without the editing or the
+  completion.
 - Telegram: see below.
 
 The frontends implement the `Console` interface of the core package,

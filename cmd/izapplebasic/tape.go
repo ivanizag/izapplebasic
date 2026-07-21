@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strings"
 
 	iz "github.com/ivanizag/izapplebasic"
 )
@@ -62,8 +64,32 @@ func (t *tapeDrive) read(con iz.Console, requested int) []uint8 {
 	return data
 }
 
-// metaCommand processes the /tape and /rewind commands, shared by
-// the consoles. Returns false if the line is not a tape command.
+/*
+tapes returns the tape names recorded on a folder, sorted, with the
+number of blocks of each one. A tape is the set of the block files
+"tape-NAME-nn.tape" sharing a name.
+*/
+func tapes(dir string) ([]string, map[string]int) {
+	matches, _ := filepath.Glob(filepath.Join(dir, "tape-*.tape"))
+	blocks := make(map[string]int)
+	for _, match := range matches {
+		name := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(match), "tape-"), ".tape")
+		// Trim the block number to get the name of the tape
+		if i := strings.LastIndexByte(name, '-'); i > 0 {
+			blocks[name[:i]]++
+		}
+	}
+	names := make([]string, 0, len(blocks))
+	for name := range blocks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, blocks
+}
+
+// metaCommand processes the /tape, /tapes and /rewind commands,
+// shared by the consoles. Returns false if the line is not a tape
+// command.
 func (t *tapeDrive) metaCommand(con iz.Console, command string, arg string) bool {
 	switch command {
 	case "/tape":
@@ -78,6 +104,26 @@ func (t *tapeDrive) metaCommand(con iz.Console, command string, arg string) bool
 		t.name = arg
 		t.pos = 0
 		con.Write(fmt.Sprintf("tape %s inserted and rewound\n", t.name))
+
+	case "/tapes":
+		dir := t.dir
+		if arg != "" {
+			dir = arg
+		}
+		names, blocks := tapes(dir)
+		if len(names) == 0 {
+			con.Write(fmt.Sprintf("no tapes in %s, record one with the BASIC SAVE\n", dir))
+			return true
+		}
+		con.Write(fmt.Sprintf("tapes in %s:\n", dir))
+		for _, name := range names {
+			inserted := ""
+			// The inserted tape is only the one of this drive
+			if dir == t.dir && name == t.name {
+				inserted = ", inserted"
+			}
+			con.Write(fmt.Sprintf("  %s (%v blocks%s)\n", name, blocks[name], inserted))
+		}
 
 	case "/rewind":
 		pos := 0

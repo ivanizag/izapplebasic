@@ -30,6 +30,15 @@ func newConsoleLiner(env *iz.Environment, tape *tapeDrive, esc *escaper, clearSc
 	c.clearScreen = clearScreen
 	c.liner = liner.NewLiner()
 	c.liner.SetCtrlCAborts(true)
+	/*
+		Tab completes the meta commands and their arguments: on a "/"
+		it shows them all, on a prefix it completes as far as it is
+		unambiguous and a second tab lists the candidates.
+	*/
+	c.liner.SetWordCompleter(func(line string, pos int) (string, []string, string) {
+		return completeMeta(c.tape, line, pos)
+	})
+	c.liner.SetTabCompletionStyle(liner.TabPrints)
 	if f, err := os.Open(historyFilename); err == nil {
 		c.liner.ReadHistory(f)
 		f.Close()

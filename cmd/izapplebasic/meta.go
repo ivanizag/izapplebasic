@@ -6,6 +6,8 @@ import (
 	"image/png"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -21,6 +23,155 @@ emulation core has none.
 
 const defaultStateFilename = "izapplebasic.state"
 const defaultProgramFilename = "program.bas"
+
+// argKind tells what the argument of a meta command completes to.
+type argKind int
+
+const (
+	argNone     argKind = iota // Nothing to offer, like a block number
+	argLanguage                // A BASIC of the emulated machine
+	argTapeName                // A tape recorded on the folder of the drive
+	argFile                    // A file of the host
+	argFolder                  // A folder of the host
+)
+
+/*
+metaCommands is the list of meta commands, used for the /help text
+and to complete them when the line is typed. usage is the name with
+its argument, "/!" glues to its command and the others take it as a
+separate word.
+*/
+var metaCommands = []struct {
+	name        string
+	usage       string
+	description string
+	arg         argKind
+}{
+	{"/help", "/help", "list the meta commands", argNone},
+	{"/quit", "/quit", "exit", argNone},
+	{"/reset", "/reset [applesoft|integer]", "reboot, losing everything not saved", argLanguage},
+	{"/save", "/save [filename]", "save the emulation state", argFile},
+	{"/load", "/load [filename]", "load the emulation state", argFile},
+	{"/screenshot", "/screenshot [filename.png]", "save an image of the emulated screen", argFile},
+	{"/export", "/export [filename.bas]", "save the program as text, Applesoft only", argFile},
+	{"/tape", "/tape [name]", "insert a cassette tape for SAVE and LOAD, or show it", argTapeName},
+	{"/tapes", "/tapes [folder]", "list the tapes recorded on a folder", argFolder},
+	{"/rewind", "/rewind [block]", "move the tape to a block, 0 by default", argNone},
+	{"/!", "/!<command>", "run a command on the host, like /!ls", argNone},
+}
+
+/*
+completeMeta completes the meta command being typed, for the tab
+completion of the readline like console. Before the space it offers
+the commands, after it the arguments each one takes: the BASICs of
+/reset, the tapes of the drive, the files and folders of the host.
+
+The result is what the console expects: the part of the line kept as
+it is, the candidates for the word being typed, and the rest after
+the cursor.
+*/
+func completeMeta(tape *tapeDrive, line string, pos int) (string, []string, string) {
+	if pos > len(line) {
+		pos = len(line)
+	}
+	typed, tail := line[:pos], line[pos:]
+	if !strings.HasPrefix(typed, "/") {
+		// A line for the emulated machine, nothing to complete
+		return typed, nil, tail
+	}
+	name, arg, hasArg := strings.Cut(typed, " ")
+	if !hasArg {
+		// Still on the command itself, it replaces the whole line
+		return "", completeCommandName(typed), tail
+	}
+	return name + " ", completeArgument(tape, strings.ToLower(name), arg), tail
+}
+
+func completeCommandName(typed string) []string {
+	var candidates []string
+	for _, cmd := range metaCommands {
+		if !strings.HasPrefix(cmd.name, strings.ToLower(typed)) {
+			continue
+		}
+		completion := cmd.name
+		if cmd.usage != cmd.name && cmd.name != "/!" {
+			// It takes an argument as a separate word
+			completion += " "
+		}
+		candidates = append(candidates, completion)
+	}
+	return candidates
+}
+
+func completeArgument(tape *tapeDrive, name string, arg string) []string {
+	for _, cmd := range metaCommands {
+		if cmd.name != name {
+			continue
+		}
+		switch cmd.arg {
+		case argLanguage:
+			return matchingNames([]string{"applesoft", "integer"}, arg)
+		case argTapeName:
+			names, _ := tapes(tape.dir)
+			return matchingNames(names, arg)
+		case argFile:
+			return completePath(arg, false)
+		case argFolder:
+			return completePath(arg, true)
+		}
+		return nil
+	}
+	return nil
+}
+
+// matchingNames keeps the candidates starting with the prefix, taken
+// without case: the names are all lowercase or a safe charset.
+func matchingNames(candidates []string, prefix string) []string {
+	var out []string
+	for _, candidate := range candidates {
+		if strings.HasPrefix(strings.ToLower(candidate), strings.ToLower(prefix)) {
+			out = append(out, candidate)
+		}
+	}
+	return out
+}
+
+/*
+completePath completes a name of the host as a shell would: the
+folder already typed is listed and the entries following the rest
+are offered, the folders with a separator to go on typing. The
+hidden entries only show when the prefix asks for them.
+*/
+func completePath(prefix string, foldersOnly bool) []string {
+	dir, name := filepath.Split(prefix)
+	listing := dir
+	if listing == "" {
+		listing = "."
+	}
+	entries, err := os.ReadDir(listing)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, entry := range entries {
+		if foldersOnly && !entry.IsDir() {
+			continue
+		}
+		if !strings.HasPrefix(entry.Name(), name) {
+			continue
+		}
+		if strings.HasPrefix(entry.Name(), ".") && !strings.HasPrefix(name, ".") {
+			continue
+		}
+		completion := dir + entry.Name()
+		if entry.IsDir() {
+			completion += string(filepath.Separator)
+		}
+		out = append(out, completion)
+	}
+	sort.Strings(out)
+	return out
+}
 
 func metaCommand(env *iz.Environment, con iz.Console, tape *tapeDrive, line string) bool {
 	if !strings.HasPrefix(line, "/") {
@@ -44,18 +195,15 @@ func metaCommand(env *iz.Environment, con iz.Console, tape *tapeDrive, line stri
 	switch command {
 	case "/help":
 		con.Write("meta commands:\n")
-		con.Write("  /help\n")
-		con.Write("  /quit: exit\n")
-		con.Write("  /save [filename]: save the emulation state\n")
-		con.Write("  /load [filename]: load the emulation state\n")
-		con.Write("  /screenshot [filename.png]: save an image of the emulated screen\n")
-		con.Write("  /export [filename.bas]: save the program as text, Applesoft only\n")
-		con.Write("  /!<command>: run a command on the host, like /!ls\n")
-		con.Write("  /tape [name]: insert a cassette tape for SAVE and LOAD, or show it\n")
-		con.Write("  /rewind [block]: move the tape to a block, 0 by default\n")
+		for _, cmd := range metaCommands {
+			con.Write(fmt.Sprintf("  %s: %s\n", cmd.usage, cmd.description))
+		}
 
 	case "/quit":
 		env.Stop()
+
+	case "/reset":
+		metaReset(con, env, arg)
 
 	case "/save":
 		filename := defaultStateFilename
@@ -117,6 +265,32 @@ func loadStateFile(env *iz.Environment, filename string) error {
 	}
 	defer f.Close()
 	return env.LoadState(f)
+}
+
+/*
+metaReset reboots the machine. Without an argument it stays on the
+BASIC in use, the name of a BASIC switches the ROM.
+
+The reset moves the CPU, which is what tells the core that the input
+wait this meta command was serving no longer exists: the line typed
+after it is served by the machine that just booted.
+*/
+func metaReset(con iz.Console, env *iz.Environment, arg string) {
+	if arg == "" {
+		env.Reset()
+		con.Write("the machine has been reset\n")
+		return
+	}
+	language, ok := iz.ParseLanguage(arg)
+	if !ok {
+		con.Write("unknown BASIC, use /reset applesoft or /reset integer\n")
+		return
+	}
+	if err := env.ResetWithLanguage(language); err != nil {
+		con.Write(fmt.Sprintf("the machine could not be reset: %v\n", err))
+		return
+	}
+	con.Write(fmt.Sprintf("the machine has been reset to %s\n", language.Name()))
 }
 
 /*
